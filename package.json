@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "pnpm --recursive --if-present typecheck",
     "check:pre-commit": "nix develop -c prek run --all-files",
     "preview": "vite preview"
   },
