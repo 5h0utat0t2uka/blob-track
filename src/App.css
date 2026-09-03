@@ -33,6 +33,10 @@
   pointer-events: none;
 }
 
+.filter-canvas {
+  filter: grayscale(1);
+}
+
 .analysis-canvas {
   display: none;
 }

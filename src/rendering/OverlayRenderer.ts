@@ -8,26 +8,32 @@ type CoverTransform = {
 }
 
 export class OverlayRenderer {
-  private readonly context: CanvasRenderingContext2D
-  private readonly canvas: HTMLCanvasElement
+  private readonly filterContext: CanvasRenderingContext2D
+  private readonly filterCanvas: HTMLCanvasElement
+  private readonly overlayContext: CanvasRenderingContext2D
+  private readonly overlayCanvas: HTMLCanvasElement
   private readonly analysisWidth: number
   private readonly analysisHeight: number
   private cssWidth = 1
   private cssHeight = 1
 
   constructor(
-    canvas: HTMLCanvasElement,
+    filterCanvas: HTMLCanvasElement,
+    overlayCanvas: HTMLCanvasElement,
     analysisWidth: number,
     analysisHeight: number,
   ) {
-    const context = canvas.getContext('2d')
-    if (!context) {
-      throw new Error('Failed to get 2D context from canvas.')
+    const filterContext = filterCanvas.getContext('2d')
+    const overlayContext = overlayCanvas.getContext('2d')
+    if (!filterContext || !overlayContext) {
+      throw new Error('Failed to get 2D contexts from canvases.')
     }
-    this.canvas = canvas
+    this.filterCanvas = filterCanvas
+    this.filterContext = filterContext
+    this.overlayCanvas = overlayCanvas
+    this.overlayContext = overlayContext
     this.analysisWidth = analysisWidth
     this.analysisHeight = analysisHeight
-    this.context = context
   }
 
   resize(cssWidth: number, cssHeight: number, devicePixelRatio: number): void {
@@ -39,29 +45,40 @@ export class OverlayRenderer {
     this.cssWidth = safeWidth
     this.cssHeight = safeHeight
 
-    if (this.canvas.width !== renderWidth || this.canvas.height !== renderHeight) {
-      this.canvas.width = renderWidth
-      this.canvas.height = renderHeight
+    for (const canvas of [this.filterCanvas, this.overlayCanvas]) {
+      if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
+        canvas.width = renderWidth
+        canvas.height = renderHeight
+      }
     }
-    this.context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+    this.filterContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+    this.overlayContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
   }
 
   clear(): void {
-    this.context.clearRect(0, 0, this.cssWidth, this.cssHeight)
+    this.filterContext.clearRect(0, 0, this.cssWidth, this.cssHeight)
+    this.overlayContext.clearRect(0, 0, this.cssWidth, this.cssHeight)
   }
 
   render(
     tracks: readonly Track[],
-    sourceWidth: number,
-    sourceHeight: number,
+    video: HTMLVideoElement,
     showTrail: boolean,
   ): void {
     this.clear()
+    const sourceWidth = video.videoWidth
+    const sourceHeight = video.videoHeight
     if (sourceWidth <= 0 || sourceHeight <= 0) {
       return
     }
 
     const transform = this.createCoverTransform(sourceWidth, sourceHeight)
+    for (const track of tracks) {
+      if (track.state === 'confirmed') {
+        this.drawGrayscaleRegion(video, track.bbox, transform)
+      }
+    }
+
     for (const track of tracks) {
       this.drawTrack(track, transform, showTrail)
     }
@@ -79,8 +96,47 @@ export class OverlayRenderer {
     }
   }
 
+  private drawGrayscaleRegion(
+    video: HTMLVideoElement,
+    source: Rect,
+    transform: CoverTransform,
+  ): void {
+    const destination = this.mapRect(source, transform)
+    if (source.width <= 0 || source.height <= 0) {
+      return
+    }
+
+    const sourceX = (source.x / this.analysisWidth) * video.videoWidth
+    const sourceY = (source.y / this.analysisHeight) * video.videoHeight
+    const sourceWidth = (source.width / this.analysisWidth) * video.videoWidth
+    const sourceHeight =
+      (source.height / this.analysisHeight) * video.videoHeight
+
+    this.filterContext.save()
+    this.filterContext.beginPath()
+    this.filterContext.rect(
+      destination.x,
+      destination.y,
+      destination.width,
+      destination.height,
+    )
+    this.filterContext.clip()
+    this.filterContext.drawImage(
+      video,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      destination.x,
+      destination.y,
+      destination.width,
+      destination.height,
+    )
+    this.filterContext.restore()
+  }
+
   private drawTrack(track: Track, transform: CoverTransform, showTrail: boolean): void {
-    const context = this.context
+    const context = this.overlayContext
     const hue = (track.id * 67) % 360
     const color = `hsl(${hue} 90% 65%)`
     const alpha = track.state === 'lost' ? 0.45 : 1
@@ -118,7 +174,7 @@ export class OverlayRenderer {
   }
 
   private drawLabel(id: number, x: number, y: number, color: string): void {
-    const context = this.context
+    const context = this.overlayContext
     const label = `ID ${id.toString().padStart(4, '0')}`
     context.font = '600 12px system-ui, sans-serif'
     const textWidth = context.measureText(label).width

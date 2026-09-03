@@ -7,7 +7,7 @@ import {
 import type { TrackingSettings } from '../tracking/types.ts'
 
 const DEFAULT_SETTINGS: TrackingSettings = {
-  motionThreshold: 50,
+  motionThreshold: 70,
   backgroundLearningRate: 0.01,
   minBlobAreaRatio: 0.02,
   maxMissingFrames: 8,
@@ -35,6 +35,7 @@ const INITIAL_METRICS: RuntimeMetrics = {
 export function TrackerView() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const analysisCanvasRef = useRef<HTMLCanvasElement>(null)
+  const filterCanvasRef = useRef<HTMLCanvasElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const engineRef = useRef<TrackingEngine | null>(null)
@@ -51,14 +52,19 @@ export function TrackerView() {
 
   useEffect(() => {
     const analysisCanvas = analysisCanvasRef.current
+    const filterCanvas = filterCanvasRef.current
     const overlayCanvas = overlayCanvasRef.current
     const stage = stageRef.current
 
-    if (!analysisCanvas || !overlayCanvas || !stage) {
+    if (!analysisCanvas || !filterCanvas || !overlayCanvas || !stage) {
       return
     }
 
-    const engine = new TrackingEngine(analysisCanvas, overlayCanvas)
+    const engine = new TrackingEngine(
+      analysisCanvas,
+      filterCanvas,
+      overlayCanvas,
+    )
     engineRef.current = engine
 
     const resize = () => {
@@ -196,6 +202,11 @@ export function TrackerView() {
     <main className="tracker-app">
       <section className="video-stage" ref={stageRef} aria-label="カメラと追跡結果">
         <video ref={videoRef} autoPlay muted playsInline aria-hidden="true" />
+        <canvas
+          ref={filterCanvasRef}
+          className="filter-canvas"
+          aria-hidden="true"
+        />
         <canvas ref={overlayCanvasRef} aria-hidden="true" />
         <canvas
           ref={analysisCanvasRef}

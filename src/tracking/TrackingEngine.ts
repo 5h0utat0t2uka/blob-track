@@ -22,6 +22,7 @@ export class TrackingEngine {
 
   constructor(
     analysisCanvas: HTMLCanvasElement,
+    filterCanvas: HTMLCanvasElement,
     overlayCanvas: HTMLCanvasElement,
     analysisWidth = 320,
     analysisHeight = 180,
@@ -46,6 +47,7 @@ export class TrackingEngine {
     )
     this.blobTracker = new BlobTracker(analysisWidth, analysisHeight)
     this.overlayRenderer = new OverlayRenderer(
+      filterCanvas,
       overlayCanvas,
       analysisWidth,
       analysisHeight,
@@ -105,12 +107,7 @@ export class TrackingEngine {
       minimumArea,
     )
     const tracks = this.blobTracker.update(detections, settings)
-    this.overlayRenderer.render(
-      tracks,
-      video.videoWidth,
-      video.videoHeight,
-      settings.showTrail,
-    )
+    this.overlayRenderer.render(tracks, video, settings.showTrail)
 
     return {
       trackCount: tracks.filter((track) => track.state === 'confirmed').length,
