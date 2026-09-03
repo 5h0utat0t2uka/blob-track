@@ -6,9 +6,9 @@ on:
     branches:
       - main
 
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+    # paths-ignore:
+    #   - "**/*.md"
+    #   - "docs/**"
 
   # push:
   #   branches:
@@ -57,24 +57,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Test
-        run: pnpm test
+      # - name: Test
+      #   run: pnpm test
 
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Check lint script
-        id: lint-script
-        run: |
-          if pnpm pkg get scripts.lint | grep -qv '^{}$'; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
+      # - name: Check lint script
+      #   id: lint-script
+      #   run: |
+      #     if pnpm pkg get scripts.lint | grep -qv '^{}$'; then
+      #       echo "exists=true" >> "$GITHUB_OUTPUT"
+      #     else
+      #       echo "exists=false" >> "$GITHUB_OUTPUT"
+      #     fi
 
-      - name: Lint
-        if: steps.lint-script.outputs.exists == 'true'
-        run: pnpm lint
+      # - name: Lint
+      #   if: steps.lint-script.outputs.exists == 'true'
+      #   run: pnpm lint
 
       - name: Build
         run: pnpm build

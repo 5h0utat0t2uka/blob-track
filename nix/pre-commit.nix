@@ -1,4 +1,4 @@
-{ pkgs, git-hooks, system, src, fixedNode }:
+{ pkgs, git-hooks, system, fixedNode, src }:
 
 git-hooks.lib.${system}.run {
   inherit src;
@@ -23,6 +23,13 @@ git-hooks.lib.${system}.run {
     #   entry = "${pkgs.biome}/bin/biome check --write --files-ignore-unknown=true --no-errors-on-unmatched";
     #   pass_filenames = true;
     # };
+    oxlint = {
+      enable = true;
+      name = "oxlint";
+      package = pkgs.oxlint;
+      entry = "${pkgs.oxlint}/bin/oxlint";
+      files = "\\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$";
+    };
     betterleaks = {
       enable = true;
       name = "betterleaks";

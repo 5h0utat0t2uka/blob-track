@@ -11,7 +11,7 @@
     let
       pkgs = import nixpkgs { inherit system; };
       fixedNode = import ./nix/fixed-node.nix { inherit pkgs system; };
-      preCommit = import ./nix/pre-commit.nix { inherit pkgs git-hooks system; src = ./.; };
+      preCommit = import ./nix/pre-commit.nix { inherit pkgs git-hooks system fixedNode; src = ./.; };
       createProject = import ./nix/create-project.nix { inherit pkgs; };
       scaffoldApp = import ./nix/scaffold-app.nix { inherit pkgs fixedNode; };
     in
