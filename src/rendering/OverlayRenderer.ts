@@ -12,8 +12,8 @@ export class OverlayRenderer {
   private readonly filterCanvas: HTMLCanvasElement
   private readonly overlayContext: CanvasRenderingContext2D
   private readonly overlayCanvas: HTMLCanvasElement
-  private readonly analysisWidth: number
-  private readonly analysisHeight: number
+  private analysisWidth: number
+  private analysisHeight: number
   private cssWidth = 1
   private cssHeight = 1
 
@@ -34,6 +34,12 @@ export class OverlayRenderer {
     this.overlayContext = overlayContext
     this.analysisWidth = analysisWidth
     this.analysisHeight = analysisHeight
+  }
+
+  setAnalysisSize(width: number, height: number): void {
+    this.clear()
+    this.analysisWidth = width
+    this.analysisHeight = height
   }
 
   resize(cssWidth: number, cssHeight: number, devicePixelRatio: number): void {

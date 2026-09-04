@@ -1,6 +1,8 @@
+import { timeConstantFrom30FpsRate, timeWeight } from './timing.ts'
+
 type MotionDetectorOptions = {
   threshold: number
-  backgroundLearningRate: number
+  backgroundTimeConstantMs: number
 }
 
 export type MotionDetectionResult = {
@@ -9,11 +11,11 @@ export type MotionDetectionResult = {
   foregroundRatio: number
 }
 
-const WARMUP_FRAME_COUNT = 20
-const WARMUP_LEARNING_RATE = 0.15
-const FOREGROUND_LEARNING_RATE = 0.001
+export const WARMUP_DURATION_MS = 700
+const WARMUP_TIME_CONSTANT_MS = timeConstantFrom30FpsRate(0.15)
+const FOREGROUND_TIME_CONSTANT_MS = timeConstantFrom30FpsRate(0.001)
 const GLOBAL_CHANGE_RATIO = 0.8
-const GLOBAL_CHANGE_LEARNING_RATE = 0.2
+const GLOBAL_CHANGE_TIME_CONSTANT_MS = timeConstantFrom30FpsRate(0.2)
 
 export class MotionDetector {
   private readonly width: number
@@ -24,7 +26,7 @@ export class MotionDetector {
   private readonly rawMask: Uint8Array
   private readonly scratchMask: Uint8Array
   private hasBackground = false
-  private warmupFramesRemaining = WARMUP_FRAME_COUNT
+  private warmupElapsedMs = 0
 
   constructor(width: number, height: number) {
     this.width = width
@@ -43,11 +45,12 @@ export class MotionDetector {
     this.rawMask.fill(0)
     this.scratchMask.fill(0)
     this.hasBackground = false
-    this.warmupFramesRemaining = WARMUP_FRAME_COUNT
+    this.warmupElapsedMs = 0
   }
 
   process(
     frame: ImageData,
+    elapsedMs: number,
     options: MotionDetectorOptions,
   ): MotionDetectionResult {
     this.toGrayscale(frame.data)
@@ -59,12 +62,12 @@ export class MotionDetector {
       return this.result(true, 0)
     }
 
-    if (this.warmupFramesRemaining > 0) {
-      this.updateEntireBackground(WARMUP_LEARNING_RATE)
-      this.warmupFramesRemaining -= 1
+    if (this.warmupElapsedMs < WARMUP_DURATION_MS) {
+      this.updateEntireBackground(timeWeight(elapsedMs, WARMUP_TIME_CONSTANT_MS))
+      this.warmupElapsedMs += elapsedMs
       this.foregroundState.fill(0)
       this.rawMask.fill(0)
-      return this.result(true, 0)
+      return this.result(this.warmupElapsedMs < WARMUP_DURATION_MS, 0)
     }
 
     const threshold = options.threshold
@@ -86,17 +89,19 @@ export class MotionDetector {
     const foregroundRatio = foregroundPixelCount / this.gray.length
 
     if (foregroundRatio >= GLOBAL_CHANGE_RATIO) {
-      this.updateEntireBackground(GLOBAL_CHANGE_LEARNING_RATE)
+      this.updateEntireBackground(timeWeight(elapsedMs, GLOBAL_CHANGE_TIME_CONSTANT_MS))
       this.foregroundState.fill(0)
       this.rawMask.fill(0)
       return this.result(true, foregroundRatio)
     }
 
+    const foregroundLearningRate = timeWeight(elapsedMs, FOREGROUND_TIME_CONSTANT_MS)
+    const backgroundLearningRate = timeWeight(elapsedMs, options.backgroundTimeConstantMs)
     for (let index = 0; index < this.gray.length; index += 1) {
       const learningRate =
         this.rawMask[index] === 1
-          ? FOREGROUND_LEARNING_RATE
-          : options.backgroundLearningRate
+          ? foregroundLearningRate
+          : backgroundLearningRate
 
       this.background[index] +=
         learningRate * (this.gray[index] - this.background[index])

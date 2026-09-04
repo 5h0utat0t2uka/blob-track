@@ -22,19 +22,22 @@ export type Track = {
   id: number
   bbox: Rect
   center: Point
+  /** Filtered observed velocity in analysis pixels per second. */
   velocity: Point
-  missingFrames: number
+  lastObservedCenter: Point
+  lastObservedBox: Rect
+  lastObservedAtMs: number
   hits: number
   state: TrackState
-  trail: Point[]
+  trail: (Point & { timestampMs: number })[]
 }
 
 export type TrackingSettings = {
   motionThreshold: number
-  backgroundLearningRate: number
+  backgroundTimeConstantMs: number
   minBlobAreaRatio: number
-  maxMissingFrames: number
+  maxMissingDurationMs: number
   maxMatchDistanceRatio: number
-  trailLength: number
+  trailDurationMs: number
   showTrail: boolean
 }

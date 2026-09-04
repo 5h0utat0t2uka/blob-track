@@ -39,7 +39,7 @@ git-hooks.lib.${system}.run {
     semgrep = {
       enable = true;
       name = "semgrep";
-      entry = "${pkgs.semgrep}/bin/semgrep --config=p/default --config=p/typescript --config=p/javascript --config=p/react --metrics=off --error .";
+      entry = "${pkgs.semgrep}/bin/semgrep --config=p/default --config=p/typescript --config=p/javascript --config=p/react --metrics=off --error --quiet .";
       pass_filenames = false;
     };
     zizmor = {

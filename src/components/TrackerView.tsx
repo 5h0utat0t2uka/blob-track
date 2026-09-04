@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { useCamera } from '../hooks/useCamera.ts'
+import type { CameraStatus } from '../camera/CameraSession.ts'
 import {
   TrackingEngine,
   type FrameResult,
 } from '../tracking/TrackingEngine.ts'
 import type { TrackingSettings } from '../tracking/types.ts'
+import { FrameScheduler } from '../tracking/FrameScheduler.ts'
 
 const DEFAULT_SETTINGS: TrackingSettings = {
   motionThreshold: 70,
-  backgroundLearningRate: 0.01,
+  backgroundTimeConstantMs: 3300,
   minBlobAreaRatio: 0.02,
-  maxMissingFrames: 8,
+  maxMissingDurationMs: 300,
   maxMatchDistanceRatio: 0.12,
-  trailLength: 50,
+  trailDurationMs: 1700,
   showTrail: true,
 }
 
@@ -100,7 +102,7 @@ export function TrackerView() {
 
     let active = true
     let callbackId: number | null = null
-    let lastProcessedAt = Number.NEGATIVE_INFINITY
+    const scheduler = new FrameScheduler()
     let lastReportAt = performance.now()
     let lastPresentedFrames: number | null = null
     let processedFrames = 0
@@ -113,8 +115,29 @@ export function TrackerView() {
       foregroundRatio: 0,
     }
 
+    const resetProcessing = () => {
+      scheduler.reset()
+      engine.reset()
+      lastReportAt = performance.now()
+      lastPresentedFrames = null
+      processedFrames = 0
+      totalProcessingTime = 0
+      missedVideoFrames = 0
+      latestResult = { ...INITIAL_METRICS, isCalibrating: true }
+      setMetrics({ ...INITIAL_METRICS, isCalibrating: true })
+    }
+    const handleVideoResize = () => {
+      engine.syncVideoSize(video)
+      resetProcessing()
+    }
+
     const processFrame: VideoFrameRequestCallback = (now, metadata) => {
       if (!active) {
+        return
+      }
+
+      if (document.visibilityState !== 'visible') {
+        callbackId = video.requestVideoFrameCallback(processFrame)
         return
       }
 
@@ -126,31 +149,24 @@ export function TrackerView() {
       }
       lastPresentedFrames = metadata.presentedFrames
 
-      const minimumInterval = 1000 / targetFpsRef.current
-
-      if (
-        document.visibilityState === 'visible' &&
-        now - lastProcessedAt >= minimumInterval - 1
-      ) {
-        const startedAt = performance.now()
-
-        try {
-          latestResult = engine.process(video, settingsRef.current)
-        } catch (error) {
-          active = false
-          setEngineError(
-            error instanceof Error
-              ? error.message
-              : 'Unknown error occurred during tracking.',
-          )
-          camera.stop()
-          return
+      // presentationTime is a per-frame timestamp in milliseconds, unlike
+      // mediaTime (seconds, potentially zero for live streams).
+      try {
+        if (scheduler.shouldProcess(metadata.presentationTime, targetFpsRef.current)) {
+          const startedAt = performance.now()
+          latestResult = engine.process(video, metadata.presentationTime, settingsRef.current)
+          totalProcessingTime += performance.now() - startedAt
+          processedFrames += 1
         }
-
-        const processingTime = performance.now() - startedAt
-        lastProcessedAt = now
-        processedFrames += 1
-        totalProcessingTime += processingTime
+      } catch (error) {
+        active = false
+        setEngineError(
+          error instanceof Error
+            ? error.message
+            : 'Unknown error occurred during tracking.',
+        )
+        camera.stop()
+        return
       }
 
       const reportDuration = now - lastReportAt
@@ -170,12 +186,15 @@ export function TrackerView() {
     }
 
     setEngineError(null)
-    engine.reset()
-    setMetrics({ ...INITIAL_METRICS, isCalibrating: true })
+    resetProcessing()
+    document.addEventListener('visibilitychange', resetProcessing)
+    video.addEventListener('resize', handleVideoResize)
     callbackId = video.requestVideoFrameCallback(processFrame)
 
     return () => {
       active = false
+      document.removeEventListener('visibilitychange', resetProcessing)
+      video.removeEventListener('resize', handleVideoResize)
       if (callbackId !== null) {
         video.cancelVideoFrameCallback(callbackId)
       }
@@ -242,24 +261,27 @@ export function TrackerView() {
 
 
       <div className='global-controls'>
+        <div>
+          <a href="https://github.com/5h0utat0t2uka/blob-track" target="_blank" rel="noopener noreferrer">Blob tracker demo:</a>
+          <p aria-live="polite">{statusText}</p>
+        </div>
         <button
           type="button"
           // className="settings-trigger"
           popoverTarget="tracking-settings"
         >
-          settings
+          setting
         </button>
-        {camera.status === 'running' ? (
+        {camera.status === 'running' || camera.status === 'suspended' || camera.status === 'requesting' ? (
           <button type="button" onClick={camera.stop}>
-            stop
+            abort
           </button>
         ) : (
           <button
             type="button"
             onClick={() => void camera.start()}
-            disabled={camera.status === 'requesting'}
           >
-            {camera.status === 'requesting' ? 'requesting…' : 'play'}
+            start
           </button>
         )}
       </div>
@@ -282,7 +304,7 @@ export function TrackerView() {
           </button>
         </div>
 
-        <p aria-live="polite">State: {statusText}</p>
+
         {/*{camera.status === 'running' ? (
           <button type="button" onClick={camera.stop}>
             カメラを停止
@@ -299,7 +321,7 @@ export function TrackerView() {
 
         <div className="control-list">
           <RangeControl
-            label="動体閾値"
+            label="Motion threshold"
             hint="大きいほど明確な変化だけを検出"
             min={5}
             max={80}
@@ -311,7 +333,7 @@ export function TrackerView() {
             }
           />
           <RangeControl
-            label="Blob面積"
+            label="Minimum blob area"
             hint="解析画面に占める最小割合"
             min={0.05}
             max={5}
@@ -326,24 +348,24 @@ export function TrackerView() {
             }
           />
           <RangeControl
-            label="追従速度"
-            hint="大きいほど照明変化へ速く適応"
-            min={0.001}
-            max={0.05}
-            step={0.001}
-            value={settings.backgroundLearningRate}
-            displayValue={settings.backgroundLearningRate.toFixed(3)}
-            onChange={(backgroundLearningRate) =>
+            label="Background adaptation time"
+            hint="大きいほど背景の変化へゆっくり適応"
+            min={0.5}
+            max={30}
+            step={0.1}
+            value={settings.backgroundTimeConstantMs / 1000}
+            displayValue={`${(settings.backgroundTimeConstantMs / 1000).toFixed(1)} s`}
+            onChange={(seconds) =>
               setSettings((current) => ({
                 ...current,
-                backgroundLearningRate,
+                backgroundTimeConstantMs: seconds * 1000,
               }))
             }
           />
         </div>
 
         <div className="option-row">
-          <label htmlFor="analysis-rate">解析レート上限</label>
+          <label htmlFor="analysis-rate">Frame rate limit</label>
           <select
             id="analysis-rate"
             value={targetFps}
@@ -355,8 +377,10 @@ export function TrackerView() {
           </select>
         </div>
 
-        <label className="checkbox-row">
+        <div className="option-row">
+          <label htmlFor="show-trail">Show trails line</label>
           <input
+            id="show-trail"
             type="checkbox"
             checked={settings.showTrail}
             onChange={(event) =>
@@ -366,10 +390,9 @@ export function TrackerView() {
               }))
             }
           />
-          軌道を表示
-        </label>
+        </div>
 
-        <button
+        {/*<button
           type="button"
           onClick={() => {
             setSettings(DEFAULT_SETTINGS)
@@ -377,9 +400,8 @@ export function TrackerView() {
           }}
         >
           Reset to default
-        </button>
-
-        {cameraDescription && <p>Input: {cameraDescription}</p>}
+        </button>*/}
+        {/*{cameraDescription && <p className='description'>Input: {cameraDescription}</p>}*/}
         {(camera.error || engineError) && (
           <p className="error-message" role="alert">
             {camera.error ?? engineError}
@@ -444,11 +466,14 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function getStatusText(
-  status: 'idle' | 'requesting' | 'running' | 'error',
+  status: CameraStatus,
   isCalibrating: boolean,
 ): string {
   if (status === 'requesting') {
     return 'Requesting access'
+  }
+  if (status === 'suspended') {
+    return 'Camera interrupted'
   }
   if (status === 'running' && isCalibrating) {
     return 'Initializing'

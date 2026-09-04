@@ -8,11 +8,22 @@
 }
 
 html,
-body,
-#root {
-  width: 100%;
-  height: 100%;
+body {
+  inline-size: 100%;
+  block-size: 100%;
   margin: 0;
   overflow: hidden;
   background: #000;
+}
+
+body {
+  container-type: size;
+}
+#root {
+  inline-size: 100cqi;
+  block-size: 100cqb;
+}
+
+button {
+  cursor: pointer;
 }
