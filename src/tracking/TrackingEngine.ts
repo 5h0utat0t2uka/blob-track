@@ -6,6 +6,7 @@ import type { TrackingSettings } from './types.ts'
 import { MAX_FRAME_GAP_MS } from './timing.ts'
 import {
   DEFAULT_ANALYSIS_LONG_EDGE,
+  OPENING_KERNEL_SIZES,
   isAnalysisLongEdge,
   type AnalysisLongEdge,
 } from './analysisConfig.ts'
@@ -22,6 +23,7 @@ type AnalysisPipeline = {
   height: number
   sourceWidth: number
   sourceHeight: number
+  openingKernelSize: number
   motionDetector: MotionDetector
   connectedComponents: ConnectedComponents
   blobTracker: BlobTracker
@@ -112,11 +114,13 @@ export class TrackingEngine {
       return
     }
     const { width, height } = getAnalysisSize(sourceWidth, sourceHeight, longEdge)
+    const openingKernelSize = OPENING_KERNEL_SIZES[longEdge]
     if (
       this.pipeline?.sourceWidth === sourceWidth &&
       this.pipeline.sourceHeight === sourceHeight &&
       this.pipeline.width === width &&
-      this.pipeline.height === height
+      this.pipeline.height === height &&
+      this.pipeline.openingKernelSize === openingKernelSize
     ) {
       return
     }
@@ -127,7 +131,8 @@ export class TrackingEngine {
       height,
       sourceWidth,
       sourceHeight,
-      motionDetector: new MotionDetector(width, height),
+      openingKernelSize,
+      motionDetector: new MotionDetector(width, height, openingKernelSize),
       connectedComponents: new ConnectedComponents(width, height),
       blobTracker: new BlobTracker(width, height),
     }

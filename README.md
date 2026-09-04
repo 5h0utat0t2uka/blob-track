@@ -2,8 +2,8 @@
 ![Blob tracking visualization](./docs/blob-tracking-visualization.png)
 This is a React application that extracts moving regions from fixed-camera footage and renders blob bounding boxes, center points, IDs, and trajectories on the client side.
 
-## features
-定点のカメラからの解析用途を前提として、精度よりも手軽さを重視したBackground Subtraction（背景差分）の実装で、以下のような特徴  
+## Features
+定点のカメラからの解析用途を前提として、精度よりも手軽さを重視したBackground Subtraction（背景差分）の実装で以下の特徴  
 - Web APIのみでリアルタイムなカメラ解析
 - ブラウザのみで動作してインストール不要
 - 映像を外部に送信せず端末内で完結
@@ -17,9 +17,9 @@ This is a React application that extracts moving regions from fixed-camera foota
 ## Implement
 1. `getUserMedia()`でカメラ映像を取得
 2. `requestVideoFrameCallback()`で映像フレームに同期
-3. 元映像の縦横比を保ち、解析用Canvasへ縮小。設定の `Analysis resolution` で長辺320px／480pxを選択（初期値480px、16:9なら横長480×270・縦長270×480）。入力解像度を超える拡大は行わず、切り替え時は背景と追跡を再初期化
+3. 設定の `Analysis resolution` で長辺320px/480pxを選択し、元映像の縦横比を保ち解析用Canvasへ縮小
 4. Running Background Modelによる背景差分
-5. 3×3 openingによる孤立ノイズ除去
+5. 選択した解析解像度に連動したopeningによる孤立ノイズ除去（320pxでは3×3、480pxでは5×5）
 6. 8近傍Connected ComponentsによるBlob抽出
 7. 距離・IoU・速度予測によるTrackとの1対1関連付け
 8. `object-fit: cover`を考慮してOverlay Canvasへ描画

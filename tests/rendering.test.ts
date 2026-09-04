@@ -5,6 +5,7 @@ import { getAnalysisSize, TrackingEngine } from '../src/tracking/TrackingEngine.
 import {
   ANALYSIS_LONG_EDGES,
   DEFAULT_ANALYSIS_LONG_EDGE,
+  OPENING_KERNEL_SIZES,
   isAnalysisLongEdge,
   type AnalysisLongEdge,
 } from '../src/tracking/analysisConfig.ts'
@@ -55,7 +56,7 @@ function canvasFixture() {
     canvas, drawCalls, boxes, transforms,
     get clears() { return clears },
     get reads() { return reads },
-    setRegion(value: Rect) { region = value },
+    setRegion(value: Rect | null) { region = value },
   }
 }
 
@@ -219,6 +220,8 @@ test('重複フレームを再解析せず、中断・巻き戻り・リセッ�
 })
 
 test('解析解像度の初期値と全選択肢は共通定数に従う', () => {
+  assert.equal(DEFAULT_ANALYSIS_LONG_EDGE, 320)
+  assert.deepEqual(OPENING_KERNEL_SIZES, { 320: 3, 480: 5 })
   assert.ok(isAnalysisLongEdge(DEFAULT_ANALYSIS_LONG_EDGE))
   const analysis = canvasFixture()
   const engine = new TrackingEngine(analysis.canvas, canvasFixture().canvas, canvasFixture().canvas)
@@ -235,6 +238,25 @@ test('解析解像度の初期値と全選択肢は共通定数に従う', () =>
     assert.equal(analysis.canvas.height, longEdge)
   }
 })
+
+for (const [sourceWidth, sourceHeight] of [[1280, 720], [720, 1280], [160, 90]]) {
+  test(`${sourceWidth}×${sourceHeight}入力で320→480→320の切り替えにopeningが連動する`, () => {
+    const analysis = canvasFixture()
+    const engine = new TrackingEngine(analysis.canvas, canvasFixture().canvas, canvasFixture().canvas)
+    const video = { videoWidth: sourceWidth, videoHeight: sourceHeight } as HTMLVideoElement
+    const settings = { ...SETTINGS, minBlobAreaRatio: 0 }
+    for (const longEdge of [320, 480, 320] as const) {
+      analysis.setRegion(null)
+      engine.syncVideoSize(video, longEdge)
+      assert.equal(engine.process(video, 0, settings).isCalibrating, true)
+      assert.equal(engine.process(video, 700, settings).isCalibrating, false)
+      analysis.setRegion({ x: 10, y: 10, width: 3, height: 3 })
+      assert.equal(engine.process(video, 750, settings).detectionCount, longEdge === 320 ? 1 : 0)
+      analysis.setRegion({ x: 10, y: 10, width: 5, height: 5 })
+      assert.equal(engine.process(video, 800, settings).detectionCount, 1)
+    }
+  })
+}
 
 test('無効な解像度は取得前でも拒否し、設定を上書きしない', () => {
   const analysis = canvasFixture()
