@@ -1,4 +1,9 @@
 import type { Detection, Rect, Track, TrackingSettings } from './types.ts'
+import { timeConstantFrom30FpsRate, timeWeight } from './timing.ts'
+
+const VELOCITY_TIME_CONSTANT_MS = timeConstantFrom30FpsRate(0.4)
+const LOST_VELOCITY_TIME_CONSTANT_MS = timeConstantFrom30FpsRate(0.1)
+const SEARCH_EXPANSION_DURATION_MS = 1000 * 4 / 30
 
 type MatchCandidate = {
   trackIndex: number
@@ -11,6 +16,7 @@ export class BlobTracker {
   private readonly height: number
   private tracks: Track[] = []
   private nextId = 1
+  private previousTimestampMs: number | null = null
 
   constructor(width: number, height: number) {
     this.width = width
@@ -20,27 +26,43 @@ export class BlobTracker {
   reset(): void {
     this.tracks = []
     this.nextId = 1
+    this.previousTimestampMs = null
   }
 
   update(
     detections: readonly Detection[],
+    timestampMs: number,
     settings: TrackingSettings,
   ): readonly Track[] {
+    if (!Number.isFinite(timestampMs)) {
+      throw new RangeError('Invalid tracking timestamp.')
+    }
+    if (timestampMs === this.previousTimestampMs) {
+      return this.tracks.filter((track) => track.state !== 'tentative')
+    }
+    if (this.previousTimestampMs !== null && timestampMs < this.previousTimestampMs) {
+      this.reset()
+    }
+    this.previousTimestampMs = timestampMs
+    // Expire before association so a late detection cannot revive an expired ID.
+    this.tracks = this.tracks.filter(
+      (track) => timestampMs - track.lastObservedAtMs <= settings.maxMissingDurationMs,
+    )
     const diagonal = Math.hypot(this.width, this.height)
     const baseMaxDistance = diagonal * settings.maxMatchDistanceRatio
     const candidates: MatchCandidate[] = []
 
     for (let trackIndex = 0; trackIndex < this.tracks.length; trackIndex += 1) {
       const track = this.tracks[trackIndex]
-      const predictedX = track.center.x + track.velocity.x
-      const predictedY = track.center.y + track.velocity.y
-      const predictedBox = {
-        ...track.bbox,
-        x: track.bbox.x + track.velocity.x,
-        y: track.bbox.y + track.velocity.y,
-      }
+      this.predictTrack(track, timestampMs)
       const maxDistance =
-        baseMaxDistance * (1 + Math.min(track.missingFrames, 4) * 0.25)
+        baseMaxDistance * (1 + Math.min(
+          (timestampMs - track.lastObservedAtMs) / SEARCH_EXPANSION_DURATION_MS,
+          1,
+        ))
+      track.trail = track.trail.filter(
+        (point) => timestampMs - point.timestampMs <= settings.trailDurationMs,
+      )
 
       for (
         let detectionIndex = 0;
@@ -49,15 +71,15 @@ export class BlobTracker {
       ) {
         const detection = detections[detectionIndex]
         const distance = Math.hypot(
-          detection.center.x - predictedX,
-          detection.center.y - predictedY,
+          detection.center.x - track.center.x,
+          detection.center.y - track.center.y,
         )
 
         if (distance > maxDistance) {
           continue
         }
 
-        const overlap = intersectionOverUnion(predictedBox, detection.bbox)
+        const overlap = intersectionOverUnion(track.bbox, detection.bbox)
         const cost = distance / maxDistance + (1 - overlap) * 0.35
 
         if (cost <= 1.25) {
@@ -81,7 +103,7 @@ export class BlobTracker {
       this.updateMatchedTrack(
         this.tracks[candidate.trackIndex],
         detections[candidate.detectionIndex],
-        settings.trailLength,
+        timestampMs,
       )
       matchedTrackIndexes.add(candidate.trackIndex)
       matchedDetectionIndexes.add(candidate.detectionIndex)
@@ -93,28 +115,16 @@ export class BlobTracker {
       }
 
       const track = this.tracks[trackIndex]
-      track.missingFrames += 1
 
       if (track.state === 'tentative') {
         continue
       }
 
       track.state = 'lost'
-      track.center.x += track.velocity.x
-      track.center.y += track.velocity.y
-      track.bbox.x += track.velocity.x
-      track.bbox.y += track.velocity.y
-      track.velocity.x *= 0.9
-      track.velocity.y *= 0.9
+      this.predictTrack(track, timestampMs)
     }
 
-    this.tracks = this.tracks.filter(
-      (track) =>
-        track.state !== 'tentative' || track.missingFrames === 0,
-    )
-    this.tracks = this.tracks.filter(
-      (track) => track.missingFrames <= settings.maxMissingFrames,
-    )
+    this.tracks = this.tracks.filter((track) => track.state !== 'tentative')
 
     for (
       let detectionIndex = 0;
@@ -122,23 +132,25 @@ export class BlobTracker {
       detectionIndex += 1
     ) {
       if (!matchedDetectionIndexes.has(detectionIndex)) {
-        this.tracks.push(this.createTrack(detections[detectionIndex]))
+        this.tracks.push(this.createTrack(detections[detectionIndex], timestampMs))
       }
     }
 
     return this.tracks.filter((track) => track.state !== 'tentative')
   }
 
-  private createTrack(detection: Detection): Track {
+  private createTrack(detection: Detection, timestampMs: number): Track {
     const track: Track = {
       id: this.nextId,
       bbox: { ...detection.bbox },
       center: { ...detection.center },
       velocity: { x: 0, y: 0 },
-      missingFrames: 0,
+      lastObservedCenter: { ...detection.center },
+      lastObservedBox: { ...detection.bbox },
+      lastObservedAtMs: timestampMs,
       hits: 1,
       state: 'tentative',
-      trail: [{ ...detection.center }],
+      trail: [{ ...detection.center, timestampMs }],
     }
     this.nextId += 1
     return track
@@ -147,22 +159,44 @@ export class BlobTracker {
   private updateMatchedTrack(
     track: Track,
     detection: Detection,
-    trailLength: number,
+    timestampMs: number,
   ): void {
-    const measuredVelocityX = detection.center.x - track.center.x
-    const measuredVelocityY = detection.center.y - track.center.y
+    const elapsedMs = timestampMs - track.lastObservedAtMs
+    const elapsedSeconds = elapsedMs / 1000
+    const measuredVelocityX = (detection.center.x - track.lastObservedCenter.x) / elapsedSeconds
+    const measuredVelocityY = (detection.center.y - track.lastObservedCenter.y) / elapsedSeconds
+    const weight = timeWeight(elapsedMs, VELOCITY_TIME_CONSTANT_MS)
 
-    track.velocity.x = track.velocity.x * 0.6 + measuredVelocityX * 0.4
-    track.velocity.y = track.velocity.y * 0.6 + measuredVelocityY * 0.4
+    track.velocity.x += weight * (measuredVelocityX - track.velocity.x)
+    track.velocity.y += weight * (measuredVelocityY - track.velocity.y)
     track.bbox = { ...detection.bbox }
     track.center = { ...detection.center }
-    track.missingFrames = 0
+    track.lastObservedBox = { ...detection.bbox }
+    track.lastObservedCenter = { ...detection.center }
+    track.lastObservedAtMs = timestampMs
     track.hits += 1
+    // Confirmation is evidence-based: require two distinct observations.
     track.state = track.hits >= 2 ? 'confirmed' : 'tentative'
-    track.trail.push({ ...detection.center })
+    track.trail.push({ ...detection.center, timestampMs })
+  }
 
-    if (track.trail.length > trailLength) {
-      track.trail.splice(0, track.trail.length - trailLength)
+  private predictTrack(track: Track, timestampMs: number): void {
+    // Integrate decaying velocity from the last observation, not from the
+    // previous prediction. The result is independent of skipped analysis frames.
+    const elapsedMs = timestampMs - track.lastObservedAtMs
+    const travelSeconds = track.state === 'lost'
+      ? LOST_VELOCITY_TIME_CONSTANT_MS / 1000 * timeWeight(elapsedMs, LOST_VELOCITY_TIME_CONSTANT_MS)
+      : elapsedMs / 1000
+    const dx = track.velocity.x * travelSeconds
+    const dy = track.velocity.y * travelSeconds
+    track.center = {
+      x: track.lastObservedCenter.x + dx,
+      y: track.lastObservedCenter.y + dy,
+    }
+    track.bbox = {
+      ...track.lastObservedBox,
+      x: track.lastObservedBox.x + dx,
+      y: track.lastObservedBox.y + dy,
     }
   }
 }
