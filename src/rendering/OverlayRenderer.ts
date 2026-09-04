@@ -182,16 +182,16 @@ export class OverlayRenderer {
   private drawLabel(id: number, x: number, y: number, color: string): void {
     const context = this.overlayContext
     const label = `ID ${id.toString().padStart(4, '0')}`
-    context.font = '600 12px system-ui, sans-serif'
+    context.font = '600 12px ui-monospace, monospace'
     const textWidth = context.measureText(label).width
     const labelWidth = textWidth + 12
     const labelHeight = 22
     const labelX = Math.max(0, Math.min(x, this.cssWidth - labelWidth))
     const labelY = y >= labelHeight ? y - labelHeight : y
 
-    context.fillStyle = 'rgb(10 15 25 / 82%)'
-    context.fillRect(labelX, labelY, labelWidth, labelHeight)
     context.fillStyle = color
+    context.fillRect(labelX, labelY, labelWidth, labelHeight)
+    context.fillStyle = 'rgb(10 15 25 / 82%)'
     context.fillText(label, labelX + 6, labelY + 15)
   }
 

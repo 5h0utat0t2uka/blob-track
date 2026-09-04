@@ -4,6 +4,11 @@ import { ConnectedComponents } from './ConnectedComponents.ts'
 import { MotionDetector } from './MotionDetector.ts'
 import type { TrackingSettings } from './types.ts'
 import { MAX_FRAME_GAP_MS } from './timing.ts'
+import {
+  DEFAULT_ANALYSIS_LONG_EDGE,
+  isAnalysisLongEdge,
+  type AnalysisLongEdge,
+} from './analysisConfig.ts'
 
 export type FrameResult = {
   trackCount: number
@@ -29,14 +34,21 @@ const INITIAL_RESULT: FrameResult = {
   foregroundRatio: 0,
 }
 
-export function getAnalysisSize(sourceWidth: number, sourceHeight: number): {
+export function getAnalysisSize(
+  sourceWidth: number,
+  sourceHeight: number,
+  longEdge: AnalysisLongEdge = DEFAULT_ANALYSIS_LONG_EDGE,
+): {
   width: number
   height: number
 } {
   if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 0 || sourceHeight <= 0) {
     throw new RangeError('Invalid video dimensions.')
   }
-  const scale = Math.min(1, 320 / Math.max(sourceWidth, sourceHeight))
+  if (!isAnalysisLongEdge(longEdge)) {
+    throw new RangeError('Invalid analysis resolution.')
+  }
+  const scale = Math.min(1, longEdge / Math.max(sourceWidth, sourceHeight))
   return {
     width: Math.max(1, Math.round(sourceWidth * scale)),
     height: Math.max(1, Math.round(sourceHeight * scale)),
@@ -48,6 +60,7 @@ export class TrackingEngine {
   private readonly analysisContext: CanvasRenderingContext2D
   private readonly overlayRenderer: OverlayRenderer
   private pipeline: AnalysisPipeline | null = null
+  private analysisLongEdge: AnalysisLongEdge = DEFAULT_ANALYSIS_LONG_EDGE
   private previousTimestampMs: number | null = null
   private lastResult: FrameResult = INITIAL_RESULT
 
@@ -87,17 +100,26 @@ export class TrackingEngine {
   }
 
   // Called on intrinsic video resize as well as before processing each frame.
-  syncVideoSize(video: HTMLVideoElement): void {
+  syncVideoSize(video: HTMLVideoElement, longEdge = this.analysisLongEdge): void {
+    if (!isAnalysisLongEdge(longEdge)) {
+      throw new RangeError('Invalid analysis resolution.')
+    }
+    this.analysisLongEdge = longEdge
     const { videoWidth: sourceWidth, videoHeight: sourceHeight } = video
     if (sourceWidth <= 0 || sourceHeight <= 0) {
       this.pipeline = null
       this.reset()
       return
     }
-    if (this.pipeline?.sourceWidth === sourceWidth && this.pipeline.sourceHeight === sourceHeight) {
+    const { width, height } = getAnalysisSize(sourceWidth, sourceHeight, longEdge)
+    if (
+      this.pipeline?.sourceWidth === sourceWidth &&
+      this.pipeline.sourceHeight === sourceHeight &&
+      this.pipeline.width === width &&
+      this.pipeline.height === height
+    ) {
       return
     }
-    const { width, height } = getAnalysisSize(sourceWidth, sourceHeight)
     this.analysisCanvas.width = width
     this.analysisCanvas.height = height
     this.pipeline = {

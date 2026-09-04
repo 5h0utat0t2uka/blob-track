@@ -2,6 +2,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { OverlayRenderer } from '../src/rendering/OverlayRenderer.ts'
 import { getAnalysisSize, TrackingEngine } from '../src/tracking/TrackingEngine.ts'
+import {
+  ANALYSIS_LONG_EDGES,
+  DEFAULT_ANALYSIS_LONG_EDGE,
+  isAnalysisLongEdge,
+  type AnalysisLongEdge,
+} from '../src/tracking/analysisConfig.ts'
 import type { Rect, Track, TrackingSettings } from '../src/tracking/types.ts'
 
 const SETTINGS: TrackingSettings = {
@@ -54,19 +60,30 @@ function canvasFixture() {
 }
 
 test('解析寸法は入力の縦横比を保持して長辺320以内に収める', () => {
-  assert.deepEqual(getAnalysisSize(1280, 720), { width: 320, height: 180 })
-  assert.deepEqual(getAnalysisSize(720, 1280), { width: 180, height: 320 })
-  assert.deepEqual(getAnalysisSize(640, 480), { width: 320, height: 240 })
-  assert.deepEqual(getAnalysisSize(1000, 1000), { width: 320, height: 320 })
+  assert.deepEqual(getAnalysisSize(1280, 720, 320), { width: 320, height: 180 })
+  assert.deepEqual(getAnalysisSize(720, 1280, 320), { width: 180, height: 320 })
+  assert.deepEqual(getAnalysisSize(640, 480, 320), { width: 320, height: 240 })
+  assert.deepEqual(getAnalysisSize(1000, 1000, 320), { width: 320, height: 320 })
   assert.deepEqual(getAnalysisSize(160, 90), { width: 160, height: 90 })
   assert.throws(() => getAnalysisSize(0, 720), RangeError)
 })
 
-for (const [sourceWidth, sourceHeight] of [[1280, 720], [720, 1280]]) {
-  test(`${sourceWidth}x${sourceHeight}のcover座標は切り抜き映像と枠で一致する`, () => {
+test('長辺480では横長480×270・縦長270×480になり、4:3や小さい入力も比率を維持する', () => {
+  assert.deepEqual(getAnalysisSize(1280, 720, 480), { width: 480, height: 270 })
+  assert.deepEqual(getAnalysisSize(720, 1280, 480), { width: 270, height: 480 })
+  assert.deepEqual(getAnalysisSize(640, 480, 480), { width: 480, height: 360 })
+  assert.deepEqual(getAnalysisSize(1000, 1000, 480), { width: 480, height: 480 })
+  assert.deepEqual(getAnalysisSize(160, 90, 480), { width: 160, height: 90 })
+})
+
+for (const [sourceWidth, sourceHeight, longEdge] of [
+  [1280, 720, 320], [720, 1280, 320],
+  [1280, 720, 480], [720, 1280, 480],
+] as const) {
+  test(`${sourceWidth}x${sourceHeight}・長辺${longEdge}のcover座標は切り抜き映像と枠で一致する`, () => {
     const filtered = canvasFixture()
     const overlay = canvasFixture()
-    const { width, height } = getAnalysisSize(sourceWidth, sourceHeight)
+    const { width, height } = getAnalysisSize(sourceWidth, sourceHeight, longEdge)
     const renderer = new OverlayRenderer(filtered.canvas, overlay.canvas, width, height)
     renderer.resize(640, 480, 3)
     assert.equal(filtered.canvas.width, 1280)
@@ -97,12 +114,72 @@ for (const [sourceWidth, sourceHeight] of [[1280, 720], [720, 1280]]) {
   })
 }
 
+test('解析解像度の切り替えで背景・追跡を初期化し、後続フレームや回転でも選択を維持する', () => {
+  const analysis = canvasFixture()
+  const filtered = canvasFixture()
+  const overlay = canvasFixture()
+  const engine = new TrackingEngine(analysis.canvas, filtered.canvas, overlay.canvas)
+  const video = { videoWidth: 1280, videoHeight: 720 } as HTMLVideoElement
+  engine.syncVideoSize(video, 320)
+  for (let timestampMs = 0; timestampMs <= 800; timestampMs += 100) {
+    engine.process(video, timestampMs, SETTINGS)
+  }
+  analysis.setRegion({ x: 20, y: 20, width: 80, height: 60 })
+  engine.process(video, 850, SETTINGS)
+  assert.equal(engine.process(video, 900, SETTINGS).trackCount, 1)
+
+  const clears = filtered.clears
+  engine.syncVideoSize(video, 480)
+  assert.equal(analysis.canvas.width, 480)
+  assert.equal(analysis.canvas.height, 270)
+  assert.ok(filtered.clears > clears)
+  const result = engine.process(video, 900, SETTINGS)
+  assert.equal(result.isCalibrating, true)
+  assert.equal(result.trackCount, 0)
+  for (let timestampMs = 1000; timestampMs <= 1700; timestampMs += 100) {
+    engine.process(video, timestampMs, SETTINGS)
+    assert.equal(analysis.canvas.width, 480)
+  }
+  const calibrated = engine.process(video, 1800, SETTINGS)
+  assert.equal(calibrated.isCalibrating, false)
+  engine.syncVideoSize(video, 480)
+  assert.equal(engine.process(video, 1900, SETTINGS).isCalibrating, false)
+
+  engine.syncVideoSize(video, 320)
+  assert.equal(analysis.canvas.width, 320)
+  assert.equal(analysis.canvas.height, 180)
+  assert.equal(engine.process(video, 1900, SETTINGS).isCalibrating, true)
+
+  engine.syncVideoSize(video, 480)
+  Object.assign(video, { videoWidth: 720, videoHeight: 1280 })
+  engine.syncVideoSize(video)
+  assert.equal(analysis.canvas.width, 270)
+  assert.equal(analysis.canvas.height, 480)
+  engine.syncVideoSize(video, 320)
+  assert.equal(analysis.canvas.width, 180)
+  assert.equal(analysis.canvas.height, 320)
+})
+
+test('映像取得前に選んだ解析解像度は取得・リセット後も維持する', () => {
+  const analysis = canvasFixture()
+  const engine = new TrackingEngine(analysis.canvas, canvasFixture().canvas, canvasFixture().canvas)
+  const video = { videoWidth: 0, videoHeight: 0 } as HTMLVideoElement
+  engine.syncVideoSize(video, 480)
+  Object.assign(video, { videoWidth: 1280, videoHeight: 720 })
+  engine.process(video, 0, SETTINGS)
+  assert.equal(analysis.canvas.width, 480)
+  engine.reset()
+  engine.process(video, 100, SETTINGS)
+  assert.equal(analysis.canvas.width, 480)
+})
+
 test('入力サイズ変更で解析バッファと背景を再初期化する', () => {
   const analysis = canvasFixture()
   const filtered = canvasFixture()
   const overlay = canvasFixture()
   const engine = new TrackingEngine(analysis.canvas, filtered.canvas, overlay.canvas)
   const video = { videoWidth: 1280, videoHeight: 720 } as HTMLVideoElement
+  engine.syncVideoSize(video, 320)
   for (let timestampMs = 0; timestampMs <= 800; timestampMs += 100) {
     engine.process(video, timestampMs, SETTINGS)
   }
@@ -139,4 +216,36 @@ test('重複フレームを再解析せず、中断・巻き戻り・リセッ�
   engine.reset()
   assert.equal(engine.process(video, 0, SETTINGS).isCalibrating, true)
   assert.throws(() => engine.process(video, NaN, SETTINGS), RangeError)
+})
+
+test('解析解像度の初期値と全選択肢は共通定数に従う', () => {
+  assert.ok(isAnalysisLongEdge(DEFAULT_ANALYSIS_LONG_EDGE))
+  const analysis = canvasFixture()
+  const engine = new TrackingEngine(analysis.canvas, canvasFixture().canvas, canvasFixture().canvas)
+  const sourceLongEdge = Math.max(...ANALYSIS_LONG_EDGES) * 2
+  const video = { videoWidth: sourceLongEdge, videoHeight: sourceLongEdge } as HTMLVideoElement
+  engine.syncVideoSize(video)
+  assert.equal(analysis.canvas.width, DEFAULT_ANALYSIS_LONG_EDGE)
+  assert.equal(getAnalysisSize(sourceLongEdge, sourceLongEdge).width, DEFAULT_ANALYSIS_LONG_EDGE)
+  for (const longEdge of ANALYSIS_LONG_EDGES) {
+    assert.ok(isAnalysisLongEdge(longEdge))
+    assert.ok(Number.isInteger(longEdge) && longEdge > 0)
+    engine.syncVideoSize(video, longEdge)
+    assert.equal(analysis.canvas.width, longEdge)
+    assert.equal(analysis.canvas.height, longEdge)
+  }
+})
+
+test('無効な解像度は取得前でも拒否し、設定を上書きしない', () => {
+  const analysis = canvasFixture()
+  const engine = new TrackingEngine(analysis.canvas, canvasFixture().canvas, canvasFixture().canvas)
+  const video = { videoWidth: 0, videoHeight: 0 } as HTMLVideoElement
+  for (const value of [0, -1, NaN, Infinity]) {
+    assert.equal(isAnalysisLongEdge(value), false)
+    assert.throws(() => engine.syncVideoSize(video, value as AnalysisLongEdge), RangeError)
+    assert.throws(() => getAnalysisSize(1280, 720, value as AnalysisLongEdge), RangeError)
+  }
+  Object.assign(video, { videoWidth: 1920, videoHeight: 1080 })
+  engine.syncVideoSize(video)
+  assert.equal(analysis.canvas.width, DEFAULT_ANALYSIS_LONG_EDGE)
 })
