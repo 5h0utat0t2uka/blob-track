@@ -203,19 +203,19 @@ export function TrackerView() {
   }, [camera.status, camera.stop])
 
   const statusText = getStatusText(camera.status, metrics.isCalibrating)
-  const cameraDescription = camera.info
-    ? [
-        camera.info.width && camera.info.height
-          ? `${camera.info.width}×${camera.info.height}`
-          : null,
-        camera.info.frameRate
-          ? `${camera.info.frameRate.toFixed(0)} fps`
-          : null,
-        camera.info.facingMode ?? null,
-      ]
-        .filter(Boolean)
-        .join(' / ')
-    : null
+  // const cameraDescription = camera.info
+  //   ? [
+  //       camera.info.width && camera.info.height
+  //         ? `${camera.info.width}×${camera.info.height}`
+  //         : null,
+  //       camera.info.frameRate
+  //         ? `${camera.info.frameRate.toFixed(0)} fps`
+  //         : null,
+  //       camera.info.facingMode ?? null,
+  //     ]
+  //       .filter(Boolean)
+  //       .join(' / ')
+  //   : null
 
   return (
     <main className="tracker-app">
