@@ -3,8 +3,14 @@ export const ANALYSIS_LONG_EDGES = [320, 480] as const
 
 export type AnalysisLongEdge = (typeof ANALYSIS_LONG_EDGES)[number]
 
-// Use the second preset by default, both in the UI and in the engine.
-export const DEFAULT_ANALYSIS_LONG_EDGE: AnalysisLongEdge = ANALYSIS_LONG_EDGES[1]
+// Shared by the UI and the engine, independently of preset ordering.
+export const DEFAULT_ANALYSIS_LONG_EDGE: AnalysisLongEdge = 320
+
+// Square opening kernel widths, keyed by the selected resolution preset.
+export const OPENING_KERNEL_SIZES = {
+  320: 3,
+  480: 5,
+} as const satisfies Record<AnalysisLongEdge, number>
 
 export function isAnalysisLongEdge(value: number): value is AnalysisLongEdge {
   return ANALYSIS_LONG_EDGES.some((longEdge) => longEdge === value)

@@ -75,6 +75,92 @@ test('ConnectedComponentsは8近傍でBlobと矩形を抽出する', () => {
   })
 })
 
+for (const kernelSize of [3, 5]) {
+  test(`${kernelSize}×${kernelSize} openingは小領域・細い動体を除去し、カーネル以上の矩形を残す`, () => {
+    const width = 24
+    const height = 20
+    for (const [regionWidth, regionHeight] of [[1, 1], [3, 3], [5, 5], [2, 10], [10, 2], [7, 8]]) {
+      const pixels: number[] = []
+      for (let y = 5; y < 5 + regionHeight; y += 1) {
+        for (let x = 5; x < 5 + regionWidth; x += 1) pixels.push(y * width + x)
+      }
+      const detector = new MotionDetector(width, height, kernelSize)
+      const options = { threshold: 20, backgroundTimeConstantMs: 3300 }
+      const background = imageData(width, height, [])
+      detector.process(background, 0, options)
+      detector.process(background, 700, options)
+      const result = detector.process(imageData(width, height, pixels), 0, options)
+      const expected = new Uint8Array(width * height)
+      if (regionWidth >= kernelSize && regionHeight >= kernelSize) {
+        for (const index of pixels) expected[index] = 1
+      }
+      assert.equal(result.isCalibrating, false)
+      assert.deepEqual(result.mask, expected, `${regionWidth}×${regionHeight}`)
+      assert.equal(result.foregroundRatio, pixels.length / (width * height))
+      // Later frames must not retain pixels from the reusable opening buffers.
+      assert.ok(detector.process(background, 0, options).mask.every((value) => value === 0))
+    }
+  })
+
+  test(`${kernelSize}×${kernelSize}の分離処理は画面端・小さい画像を含め2次元の参照実装と一致する`, () => {
+    let seed = 12345
+    for (const [width, height] of [[1, 1], [2, 8], [8, 2], [3, 3], [5, 5], [13, 11], [11, 13]]) {
+      const detector = new MotionDetector(width, height, kernelSize)
+      const options = { threshold: 20, backgroundTimeConstantMs: 3300 }
+      const background = imageData(width, height, [])
+      for (let sample = 0; sample < 20; sample += 1) {
+        const input = new Uint8Array(width * height)
+        for (let index = 0; index < input.length; index += 1) {
+          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+          // Include solid regions touching the borders as well as repeatable noise.
+          input[index] = sample === 0
+            ? Number(index % width < Math.ceil(width / 2))
+            : Number(seed / 2 ** 32 < 0.65)
+        }
+        // Avoid the separate global-lighting-change calibration path.
+        if (input.reduce((sum, value) => sum + value, 0) >= input.length * 0.8) continue
+        const pixels = Array.from(input.keys()).filter((index) => input[index] === 1)
+        detector.reset()
+        detector.process(background, 0, options)
+        detector.process(background, 700, options)
+        const result = detector.process(imageData(width, height, pixels), 0, options)
+        assert.equal(result.isCalibrating, false)
+        assert.deepEqual(result.mask, referenceOpening(input, width, height, kernelSize), `${width}×${height}, sample ${sample}`)
+      }
+    }
+  })
+}
+
+test('openingは偶数・非整数・3未満のカーネルサイズを拒否する', () => {
+  for (const size of [0, -3, 1, 2, 4, 3.5, NaN, Infinity]) {
+    assert.throws(() => new MotionDetector(10, 10, size), RangeError)
+  }
+})
+
+// Deliberately use the direct square neighborhood as an independent correctness oracle.
+// Both stages discard positions where the full kernel does not fit, matching the original 3×3 path.
+function referenceOpening(input: Uint8Array, width: number, height: number, kernelSize: number): Uint8Array {
+  const radius = (kernelSize - 1) / 2
+  let source = input
+  for (const isErosion of [true, false]) {
+    const output = new Uint8Array(width * height)
+    for (let y = radius; y < height - radius; y += 1) {
+      for (let x = radius; x < width - radius; x += 1) {
+        let value = isErosion ? 1 : 0
+        for (let dy = -radius; dy <= radius; dy += 1) {
+          for (let dx = -radius; dx <= radius; dx += 1) {
+            const neighbor = source[(y + dy) * width + x + dx]
+            value = isErosion ? value & neighbor : value | neighbor
+          }
+        }
+        output[y * width + x] = value
+      }
+    }
+    source = output
+  }
+  return source
+}
+
 test('BlobTrackerは確認済みIDを短い欠落の後も維持する', () => {
   const tracker = new BlobTracker(100, 100)
 
