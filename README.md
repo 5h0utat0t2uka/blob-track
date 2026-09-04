@@ -1,4 +1,5 @@
 # Blob Track
+![Blob tracking visualization](./docs/blob-tracking-visualization.png)
 This is a React application that extracts moving regions from fixed-camera footage and renders blob bounding boxes, center points, IDs, and trajectories on the client side.
 
 ## features
