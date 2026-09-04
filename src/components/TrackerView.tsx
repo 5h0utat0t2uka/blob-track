@@ -233,12 +233,12 @@ export function TrackerView() {
           aria-hidden="true"
         />
 
-        {/*{camera.status !== 'running' && (
+        {camera.status !== 'running' && (
           <div className="stage-placeholder">
-            <p>設定を開いてカメラを開始してください</p>
-            <span>映像と解析結果は端末内だけで処理されます</span>
+            <p>右上のアイコンからカメラを開始</p>
+            <span>映像と解析は端末内のみで処理され外部への送信はありません</span>
           </div>
-        )}*/}
+        )}
 
         <dl className="metrics" aria-label="Tracking metrics">
           <Metric label="TRACKS" value={metrics.trackCount.toString()} />
@@ -259,29 +259,33 @@ export function TrackerView() {
         </dl>
       </section>
 
-
       <div className='global-controls'>
         <div>
-          <a href="https://github.com/5h0utat0t2uka/blob-track" target="_blank" rel="noopener noreferrer">Blob tracker demo:</a>
+          <a href="https://github.com/5h0utat0t2uka/blob-track" target="_blank" rel="noopener noreferrer">Blob tracker:</a>
           <p aria-live="polite">{statusText}</p>
         </div>
         <button
           type="button"
-          // className="settings-trigger"
           popoverTarget="tracking-settings"
+          aria-label="Settings"
         >
-          setting
+          <svg width={24} height={24} viewBox="-5 -7 24 24"><path fill="currentColor" d="M1 0h5a1 1 0 1 1 0 2H1a1 1 0 1 1 0-2m7 8h5a1 1 0 0 1 0 2H8a1 1 0 1 1 0-2M1 4h12a1 1 0 0 1 0 2H1a1 1 0 1 1 0-2"></path></svg>
         </button>
         {camera.status === 'running' || camera.status === 'suspended' || camera.status === 'requesting' ? (
-          <button type="button" onClick={camera.stop}>
-            abort
+          <button
+            type="button"
+            onClick={camera.stop}
+            aria-label="Abort"
+          >
+            <svg width={24} height={24} viewBox="0 0 24 24"><path fill="currentColor" d="M10.713 14.713Q11 14.425 11 14v-4q0-.425-.288-.712T10 9t-.712.288T9 10v4q0 .425.288.713T10 15t.713-.288m4 0Q15 14.426 15 14v-4q0-.425-.288-.712T14 9t-.712.288T13 10v4q0 .425.288.713T14 15t.713-.288M12 22q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2 12q0-.8.125-1.6T2.5 8.825q.125-.4.513-.537t.737.062q.375.2.538.588t.037.812q-.15.55-.238 1.113T4 12q0 3.35 2.325 5.675T12 20t5.675-2.325T20 12t-2.325-5.675T12 4q-.6 0-1.187.087T9.65 4.35q-.425.125-.8-.025T8.3 3.8t-.013-.762t.563-.513q.75-.275 1.55-.4T12 2q2.075 0 3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12 22M4.438 6.563Q4 6.125 4 5.5t.438-1.062T5.5 4t1.063.438T7 5.5t-.437 1.063T5.5 7t-1.062-.437M12 12"></path></svg>
           </button>
         ) : (
           <button
             type="button"
             onClick={() => void camera.start()}
+            aria-label="Start"
           >
-            start
+              <svg width={24} height={24} viewBox="0 0 24 24"><path fill="currentColor" d="m10.775 15.475l4.6-3.05q.225-.15.225-.425t-.225-.425l-4.6-3.05q-.25-.175-.513-.038T10 8.926v6.15q0 .3.263.438t.512-.038M12 22q-2.075 0-3.9-.788t-3.175-2.137T2.788 15.9T2 12q0-.8.125-1.6T2.5 8.825q.125-.4.513-.537t.737.062q.375.2.538.588t.037.812q-.15.55-.238 1.113T4 12q0 3.35 2.325 5.675T12 20t5.675-2.325T20 12t-2.325-5.675T12 4q-.6 0-1.187.087T9.65 4.35q-.425.125-.8-.025T8.3 3.8t-.013-.762t.563-.513q.75-.275 1.55-.4T12 2q2.075 0 3.9.788t3.175 2.137T21.213 8.1T22 12t-.788 3.9t-2.137 3.175t-3.175 2.138T12 22M4.438 6.563Q4 6.125 4 5.5t.438-1.062T5.5 4t1.063.438T7 5.5t-.437 1.063T5.5 7t-1.062-.437M12 12"></path></svg>
           </button>
         )}
       </div>
@@ -304,25 +308,10 @@ export function TrackerView() {
           </button>
         </div>
 
-
-        {/*{camera.status === 'running' ? (
-          <button type="button" onClick={camera.stop}>
-            カメラを停止
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => void camera.start()}
-            disabled={camera.status === 'requesting'}
-          >
-            {camera.status === 'requesting' ? '接続中…' : 'カメラを開始'}
-          </button>
-        )}*/}
-
         <div className="control-list">
           <RangeControl
             label="Motion threshold"
-            hint="大きいほど明確な変化だけを検出"
+            hint="小さいほどわずかな変化も検出"
             min={5}
             max={80}
             step={1}
@@ -334,7 +323,7 @@ export function TrackerView() {
           />
           <RangeControl
             label="Minimum blob area"
-            hint="解析画面に占める最小割合"
+            hint="小さいほど小さな動体を検出"
             min={0.05}
             max={5}
             step={0.05}
@@ -349,7 +338,7 @@ export function TrackerView() {
           />
           <RangeControl
             label="Background adaptation time"
-            hint="大きいほど背景の変化へゆっくり適応"
+            hint="小さいほど変化へ速く適応"
             min={0.5}
             max={30}
             step={0.1}
@@ -476,7 +465,7 @@ function getStatusText(
     return 'Camera interrupted'
   }
   if (status === 'running' && isCalibrating) {
-    return 'Initializing'
+    return 'Initialize'
   }
   if (status === 'running') {
     return 'Running'
