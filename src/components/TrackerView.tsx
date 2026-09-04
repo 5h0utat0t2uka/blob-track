@@ -7,6 +7,12 @@ import {
 } from '../tracking/TrackingEngine.ts'
 import type { TrackingSettings } from '../tracking/types.ts'
 import { FrameScheduler } from '../tracking/FrameScheduler.ts'
+import {
+  ANALYSIS_LONG_EDGES,
+  DEFAULT_ANALYSIS_LONG_EDGE,
+  isAnalysisLongEdge,
+  type AnalysisLongEdge,
+} from '../tracking/analysisConfig.ts'
 
 const DEFAULT_SETTINGS: TrackingSettings = {
   motionThreshold: 70,
@@ -45,6 +51,7 @@ export function TrackerView() {
   const targetFpsRef = useRef(30)
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [targetFps, setTargetFps] = useState(30)
+  const [analysisLongEdge, setAnalysisLongEdge] = useState<AnalysisLongEdge>(DEFAULT_ANALYSIS_LONG_EDGE)
   const [metrics, setMetrics] = useState(INITIAL_METRICS)
   const [engineError, setEngineError] = useState<string | null>(null)
   const camera = useCamera(videoRef)
@@ -127,7 +134,7 @@ export function TrackerView() {
       setMetrics({ ...INITIAL_METRICS, isCalibrating: true })
     }
     const handleVideoResize = () => {
-      engine.syncVideoSize(video)
+      engine.syncVideoSize(video, analysisLongEdge)
       resetProcessing()
     }
 
@@ -186,6 +193,7 @@ export function TrackerView() {
     }
 
     setEngineError(null)
+    engine.syncVideoSize(video, analysisLongEdge)
     resetProcessing()
     document.addEventListener('visibilitychange', resetProcessing)
     video.addEventListener('resize', handleVideoResize)
@@ -200,7 +208,7 @@ export function TrackerView() {
       }
       engine.reset()
     }
-  }, [camera.status, camera.stop])
+  }, [camera.status, camera.stop, analysisLongEdge])
 
   const statusText = getStatusText(camera.status, metrics.isCalibrating)
   // const cameraDescription = camera.info
@@ -236,7 +244,7 @@ export function TrackerView() {
         {camera.status !== 'running' && (
           <div className="stage-placeholder">
             <p>右上のアイコンからカメラを開始</p>
-            <span>映像と解析は端末内のみで処理され外部への送信はありません</span>
+            <span>映像と解析は端末内のみで処理されます</span>
           </div>
         )}
 
@@ -367,7 +375,27 @@ export function TrackerView() {
         </div>
 
         <div className="option-row">
-          <label htmlFor="show-trail">Show trails line</label>
+          <label htmlFor="analysis-resolution">Analysis resolution</label>
+          <select
+            id="analysis-resolution"
+            value={analysisLongEdge}
+            // aria-describedby="analysis-resolution-hint"
+            onChange={(event) => {
+              const value = Number(event.target.value)
+              if (isAnalysisLongEdge(value)) setAnalysisLongEdge(value)
+            }}
+          >
+            {ANALYSIS_LONG_EDGES.map((longEdge) => (
+              <option key={longEdge} value={longEdge}>{longEdge} px</option>
+            ))}
+          </select>
+        </div>
+        {/*<small id="analysis-resolution-hint">
+          解析する長辺の画素数で、大きいほど細部を解析し処理負荷が増加します。
+        </small>*/}
+
+        <div className="option-row">
+          <label htmlFor="show-trail">Trail lines</label>
           <input
             id="show-trail"
             type="checkbox"

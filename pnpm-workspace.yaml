@@ -17,8 +17,3 @@ trustPolicyExclude:
 minimumReleaseAge: 10080
 overrides:
   rolldown: 1.2.5
-# minimumReleaseAgeExclude:
-#   - react
-#   - react-dom
-#   - "@types/react"
-#   - "@types/react-dom"
