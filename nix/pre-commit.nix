@@ -9,6 +9,7 @@ git-hooks.lib.${system}.run {
     check-added-large-files = {
       enable = true;
       args = [ "--maxkb=500" ];
+      excludes = [ "^docs/blob-tracking-visualization\\.png$" ];
     };
     node-tests = {
       enable = true;
@@ -17,12 +18,6 @@ git-hooks.lib.${system}.run {
       files = "^(src|tests)/.*\\.tsx?$";
       pass_filenames = false;
     };
-    # biome = {
-    #   enable = true;
-    #   name = "biome";
-    #   entry = "${pkgs.biome}/bin/biome check --write --files-ignore-unknown=true --no-errors-on-unmatched";
-    #   pass_filenames = true;
-    # };
     oxlint = {
       enable = true;
       name = "oxlint";
