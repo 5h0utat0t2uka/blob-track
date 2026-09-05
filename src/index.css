@@ -32,11 +32,12 @@ button {
   padding: 1rem;
   section {
     > a {
-      inline-size: max-content;
+      inline-size: fit-content;
       display: grid;
       grid-template-columns: auto 1fr;
       gap: 0.5rem;
       align-items: center;
+      text-decoration: none;
       > svg {
         inline-size: 1lh;
         block-size: 1lh;
@@ -56,8 +57,10 @@ button {
           flex-direction: column;
           gap: 0.5rem;
           a {
-            inline-size: max-content;
+            inline-size: fit-content;
             font-size: 1.2rem;
+            text-underline-offset: 0.2ex;
+            text-decoration-thickness: from-font;
           }
           span {
             display: block;
