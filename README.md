@@ -1,6 +1,7 @@
 # Vision Tracker
 ![Blob tracking visualization](./docs/blob-tracking-visualization.png)
-A React demo of browser-based detection and tracking using background subtraction and MediaPipe Tasks Vision Object Detector. Both modes display bounding boxes, center points, track IDs, and motion trails regions. All video processing runs locally in the browser without uploading camera frames.
+A React demo of browser-based detection and tracking using background subtraction and MediaPipe Tasks Vision Object Detector.  
+All video processing runs locally in the browser without uploading camera frames.
 
 ## Features
 - リアルタイムなカメラ映像の解析

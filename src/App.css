@@ -45,9 +45,15 @@
   position: fixed;
   inset: 0;
   margin: auto;
+  display: grid;
+  gap: 0.5rem;
+  place-items: center;
+  place-content: center;
   inline-size: max-content;
-  block-size: max-content;
-  text-align: center;
+  /*block-size: max-content;*/
+  p {
+    margin: 0;
+  }
   span {
     font-size: 0.8rem;
     color: gray;
@@ -234,13 +240,18 @@
 .category-options {
   display: grid;
   gap: 0.5rem;
-  /*margin-block: 2rem;*/
-}
-
-.category-options label {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  padding: 1rem;
+  border-radius: 6px;
+  border-width: 1px;
+  legend {
+    padding-inline: 0.5rem;
+    margin-inline: -0.5rem;
+  }
+  label {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
 }
 
 .checkbox-row {
