@@ -1,6 +1,6 @@
 # Vision Tracker
 ![Blob tracking visualization](./docs/blob-tracking-visualization.png)
-This React application compares client-side tracking using background subtraction and MediaPipe Tasks Vision. Both modes render bounding boxes, center points, IDs, and trajectories regions without uploading camera frames.
+A React demo of browser-based detection and tracking using background subtraction and MediaPipe Tasks Vision Object Detector. Both modes display bounding boxes, center points, track IDs, and motion trails regions. All video processing runs locally in the browser without uploading camera frames.
 
 ## Features
 - リアルタイムなカメラ映像の解析
@@ -33,13 +33,15 @@ This React application compares client-side tracking using background subtractio
 8. `object-fit: cover`を考慮してOverlay Canvasへ描画
 
 ## MediaPipe Tasks Vision Object Detection & Track
-1. 量子化した`efficientnet-lite0-int8-v1`とMediaPipe WASMを同一オリジンから読み込み
+1. EfficientDet-Lite0 int8 v1＋CPU（初期値）とMediaPipe WASMを同一オリジンから読み込み。設定の`Inference backend`でfloat16 v1＋GPUへ切り替え可能
 2. `requestVideoFrameCallback()`から既定10fps（5/10/15fpsから選択）で最新フレームを選択
 3. `Inference resolution`で選んだ長辺320/480/640px以内（初期値640px）へ縦横比を維持して縮小した`ImageBitmap`をmodule Workerへtransferし、`detectForVideo()`をMain Thread外で実行
 4. `categoryAllowlist`で人物（初期値）・車・自転車を複数選択
 5. MediaPipeのbboxを元映像の座標へ戻して共通の`Detection`へ変換し、カテゴリが一致するTrackだけを関連付け
 6. カメラ・カテゴリ・映像寸法・推論解像度の変更時は映像セッションの世代番号を更新し、古い非同期結果を破棄。モデル設定の要求番号は別に管理し、設定変更中の停止でも設定完了通知を受理
 7. 推論結果の受信時だけ`BlobTracker`を更新し、`requestVideoFrameCallback()`で最新の追跡状態と映像を`OverlayRenderer`へ描画。再描画で観測回数やTrackの寿命を進めない
+
+<!--バックエンド切り替え時は旧Detectorを解放し、Workerを作り直します。Trackと時間統計はリセットし、カメラ・カテゴリ・Confidence・解像度・FPS・描画設定は維持します。float16モデルはGPU選択時のみ取得します。GPU初期化・推論の失敗は画面に表示し、`Use CPU · int8`からCPUへ戻せます（自動フォールバックはしません）。モデルとdelegateの対応・初期値は`src/components/mediapipe-tasks-vision/config.ts`で管理します。GPUが必ず速いとは限らないため、同じ映像と設定で既存の平均・p95を比較してください。-->
 
 <!--### Performance comparison
 - 両方式の`Grayscale regions`でグレースケールだけを無効化できます。矩形・ID・軌跡は維持します。CSSの`backdrop-filter`方式は使用していません。
@@ -48,7 +50,7 @@ This React application compares client-side tracking using background subtractio
 - 背景差分では画像取得、背景更新・opening、Blob抽出、追跡、描画、全体を計測します。背景初期化中に実行しないBlob抽出・追跡はサンプルに含めません。背景差分の`CAPTURE`は`drawImage()`と`getImageData()`の時間、`PROCESSING`は画像取得開始から描画命令発行完了までです。
 - グレースケール切り替えでは時間統計だけをリセットします。カメラ・映像寸法・解像度の切り替えでは追跡状態もリセットします。
 - 同じ映像・対象端末の本番ビルドで解像度・FPS・グレースケールの有無を比較してください。区間ごとにサンプル数や期間が異なるため、平均やp95の合計を全体時間として扱わないでください。GPU・合成の負荷はブラウザのPerformance記録で別途確認します。
-- モデルとCPU delegate、検出数の上限、関連付け方式、Trackごとの切り抜き方式は維持しています。Worker化・GPU化・空間分割・複数矩形の一括クリップは実測後の検討対象です。-->
+- 検出数の上限、関連付け方式、Trackごとの切り抜き方式は維持しています。背景差分のWorker化・空間分割・複数矩形の一括クリップは実測後の検討対象です。-->
 
 <!--### Processing and metrics
 - Workerが受付可能なときだけFPSスケジューラを進め、画像取得・推論は同時に1件までで、フレームをキューに蓄積しない

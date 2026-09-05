@@ -12,6 +12,10 @@ import {
 } from '../components/shared/TrackerControls.tsx'
 import {
   DEFAULT_DETECTION_CATEGORIES,
+  DEFAULT_INFERENCE_BACKEND,
+  INFERENCE_BACKENDS,
+  isInferenceBackend,
+  type InferenceBackend,
   DEFAULT_INFERENCE_FPS,
   DEFAULT_SCORE_THRESHOLD,
   DETECTION_CATEGORIES,
@@ -84,6 +88,8 @@ export function MediaPipeTrackerPage() {
   const previousConfigurationRef = useRef(initialConfigurationKey)
   const [categories, setCategories] = useState<DetectionCategory[]>([...DEFAULT_DETECTION_CATEGORIES])
   const [scoreThreshold, setScoreThreshold] = useState(DEFAULT_SCORE_THRESHOLD)
+  const [backend, setBackend] = useState<InferenceBackend>(DEFAULT_INFERENCE_BACKEND)
+  const configurationRef = useRef({ categories, scoreThreshold })
   const [inferenceFps, setInferenceFps] = useState(DEFAULT_INFERENCE_FPS)
   const [showTrail, setShowTrail] = useState(true)
   const [showGrayscale, setShowGrayscale] = useState(true)
@@ -97,6 +103,7 @@ export function MediaPipeTrackerPage() {
   showTrailRef.current = showTrail
   showGrayscaleRef.current = showGrayscale
   inferenceFpsRef.current = inferenceFps
+  configurationRef.current = { categories, scoreThreshold }
 
   useEffect(() => {
     const filterCanvas = filterCanvasRef.current
@@ -114,6 +121,24 @@ export function MediaPipeTrackerPage() {
     resizeObserver.observe(stage)
     resize()
 
+    return () => {
+      resizeObserver.disconnect()
+      renderer.clear()
+      rendererRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    // A fresh Worker isolates model/delegate resources and asynchronous results
+    // from the previous backend, including failed GPU initialization.
+    const configuration = configurationRef.current
+    previousConfigurationRef.current = `${configuration.categories.join(',')}:${configuration.scoreThreshold}`
+    trackerRef.current = null
+    pendingDrawRef.current = null
+    rendererRef.current?.clear()
+    accumulatorRef.current = createAccumulator()
+    timings.reset()
+    setMetrics(INITIAL_METRICS)
     const detector = new ObjectDetectorClient({
       onStatusChange: (status, message) => {
         setDetectorStatus(status)
@@ -126,24 +151,23 @@ export function MediaPipeTrackerPage() {
       },
     })
     detectorRef.current = detector
-    const assets = resolveMediaPipeAssetUrls(import.meta.env.BASE_URL, window.location.origin)
+    const assets = resolveMediaPipeAssetUrls(import.meta.env.BASE_URL, window.location.origin, backend)
     detector.initialize(
       assets.modelUrl,
       assets.wasmRoot,
-      DEFAULT_DETECTION_CATEGORIES,
-      DEFAULT_SCORE_THRESHOLD,
+      configuration.categories,
+      configuration.scoreThreshold,
+      backend,
     )
 
     return () => {
-      resizeObserver.disconnect()
       detector.dispose()
-      renderer.clear()
-      rendererRef.current = null
+      rendererRef.current?.clear()
       trackerRef.current = null
       pendingDrawRef.current = null
       detectorRef.current = null
     }
-  }, [])
+  }, [backend, timings])
 
   useEffect(() => {
     const configurationKey = `${categories.join(',')}:${scoreThreshold}`
@@ -159,7 +183,7 @@ export function MediaPipeTrackerPage() {
       detectorRef.current?.configure(categories, scoreThreshold)
     }, 150)
     return () => window.clearTimeout(timer)
-  }, [categories, scoreThreshold, timings])
+  }, [categories, scoreThreshold, backend, timings])
 
   useEffect(() => {
     const video = videoRef.current
@@ -271,7 +295,7 @@ export function MediaPipeTrackerPage() {
       detector.beginSession()
       rendererRef.current?.clear()
     }
-  }, [camera.status, camera.stop, detectorStatus, timings, inferenceLongEdge])
+  }, [camera.status, camera.stop, detectorStatus, backend, timings, inferenceLongEdge])
 
   function handleResult(result: ObjectDetectorResult): void {
     const video = videoRef.current
@@ -402,6 +426,19 @@ export function MediaPipeTrackerPage() {
             onChange={setScoreThreshold}
           />
         </div>
+
+        <div className="option-row">
+          <label htmlFor="inference-backend">Inference backend</label>
+          <select id="inference-backend" value={backend} onChange={event => {
+            const value = event.target.value
+            if (isInferenceBackend(value)) setBackend(value)
+          }}>
+            {Object.entries(INFERENCE_BACKENDS).map(([value, option]) => (
+              <option key={value} value={value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="option-row">
           <label htmlFor="camera-device">Camera</label>
           <select
@@ -421,6 +458,7 @@ export function MediaPipeTrackerPage() {
             ))}
           </select>
         </div>
+
         <div className="option-row">
           <label htmlFor="inference-rate">Inference FPS</label>
           <select id="inference-rate" value={inferenceFps} onChange={(event) => setInferenceFps(Number(event.target.value))}>
@@ -451,6 +489,9 @@ export function MediaPipeTrackerPage() {
         </div>
 
         {(camera.error || detectorError) && <p className="error-message" role="alert">{camera.error ?? detectorError}</p>}
+        {detectorStatus === 'error' && backend === 'gpu-float16' && (
+          <button type="button" onClick={() => setBackend(DEFAULT_INFERENCE_BACKEND)}>Use CPU · int8</button>
+        )}
       </aside>
     </main>
   )

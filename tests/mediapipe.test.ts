@@ -5,6 +5,9 @@ import test from 'node:test'
 import { convertMediaPipeDetections } from '../src/components/mediapipe-tasks-vision/convertDetections.ts'
 import {
   DEFAULT_DETECTION_CATEGORIES,
+  DEFAULT_INFERENCE_BACKEND,
+  INFERENCE_BACKENDS,
+  isInferenceBackend,
   DETECTION_CATEGORIES,
   resolveMediaPipeAssetUrls,
   getInferenceSize,
@@ -94,6 +97,26 @@ test('配置したEfficientDet-Lite0モデルは記録済みSHA-256と一致す�
     createHash('sha256').update(model).digest('hex'),
     '0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb',
   )
+})
+
+test('GPU用float16 v1モデルのSHA-256とTFLite識別子を検証する', async () => {
+  const model = await readFile(new URL('../public/mediapipe/models/efficientdet-lite0-float16-v1.tflite', import.meta.url))
+  assert.equal(model.subarray(4, 8).toString(), 'TFL3')
+  assert.equal(createHash('sha256').update(model).digest('hex'), '4b59100025bea1235a84c1038879a6cccc9f6c49f5e41144e91e74d99e780993')
+})
+
+test('初期値はint8 CPUで、GPU選択時だけfloat16の同一オリジンURLを解決する', () => {
+  assert.equal(DEFAULT_INFERENCE_BACKEND, 'cpu-int8')
+  assert.equal(INFERENCE_BACKENDS['cpu-int8'].delegate, 'CPU')
+  assert.equal(INFERENCE_BACKENDS['gpu-float16'].delegate, 'GPU')
+  assert.ok(isInferenceBackend('cpu-int8'))
+  assert.ok(isInferenceBackend('gpu-float16'))
+  assert.equal(isInferenceBackend('toString'), false)
+  assert.equal(isInferenceBackend('gpu-int8'), false)
+  assert.deepEqual(resolveMediaPipeAssetUrls('/demo/', 'https://example.com', 'gpu-float16'), {
+    modelUrl: 'https://example.com/demo/mediapipe/models/efficientdet-lite0-float16-v1.tflite',
+    wasmRoot: 'https://example.com/demo/mediapipe/wasm',
+  })
 })
 
 function detection(categoryName: string, x: number): Detection {

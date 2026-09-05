@@ -6,6 +6,25 @@ export const DETECTION_CATEGORIES = [
 
 export type DetectionCategory = (typeof DETECTION_CATEGORIES)[number]['value']
 
+export const INFERENCE_BACKENDS = {
+  'cpu-int8': {
+    label: 'CPU · int8',
+    delegate: 'CPU',
+    modelPath: 'mediapipe/models/efficientdet-lite0-int8-v1.tflite',
+  },
+  'gpu-float16': {
+    label: 'GPU · float16',
+    delegate: 'GPU',
+    modelPath: 'mediapipe/models/efficientdet-lite0-float16-v1.tflite',
+  },
+} as const
+export type InferenceBackend = keyof typeof INFERENCE_BACKENDS
+export const DEFAULT_INFERENCE_BACKEND: InferenceBackend = 'cpu-int8'
+
+export function isInferenceBackend(value: string): value is InferenceBackend {
+  return Object.hasOwn(INFERENCE_BACKENDS, value)
+}
+
 export const DEFAULT_DETECTION_CATEGORIES: readonly DetectionCategory[] = ['person']
 export const DEFAULT_SCORE_THRESHOLD = 0.7
 export const DEFAULT_INFERENCE_FPS = 10
@@ -30,16 +49,15 @@ export function getInferenceSize(width: number, height: number, longEdge: Infere
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) }
 }
 
-const MODEL_PATH = 'mediapipe/models/efficientdet-lite0-int8-v1.tflite'
 const WASM_PATH = 'mediapipe/wasm'
 
-export function resolveMediaPipeAssetUrls(baseUrl: string, origin: string): {
+export function resolveMediaPipeAssetUrls(baseUrl: string, origin: string, backend: InferenceBackend = DEFAULT_INFERENCE_BACKEND): {
   modelUrl: string
   wasmRoot: string
 } {
   const base = new URL(baseUrl, origin)
   return {
-    modelUrl: new URL(MODEL_PATH, base).href,
+    modelUrl: new URL(INFERENCE_BACKENDS[backend].modelPath, base).href,
     wasmRoot: new URL(WASM_PATH, base).href.replace(/\/$/, ''),
   }
 }
