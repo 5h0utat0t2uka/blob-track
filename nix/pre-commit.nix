@@ -9,7 +9,10 @@ git-hooks.lib.${system}.run {
     check-added-large-files = {
       enable = true;
       args = [ "--maxkb=500" ];
-      excludes = [ "^docs/blob-tracking-visualization\\.png$" ];
+      excludes = [
+        "^docs/blob-tracking-visualization\\.png$"
+        "^public/mediapipe/models/efficientdet-lite0-int8-v1\\.tflite$"
+      ];
     };
     node-tests = {
       enable = true;

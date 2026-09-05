@@ -1,0 +1,164 @@
+import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import test from 'node:test'
+import { convertMediaPipeDetections } from '../src/components/mediapipe-tasks-vision/convertDetections.ts'
+import {
+  DEFAULT_DETECTION_CATEGORIES,
+  DETECTION_CATEGORIES,
+  resolveMediaPipeAssetUrls,
+  getInferenceSize,
+  TRACK_MISSING_TOLERANCE_MS,
+} from '../src/components/mediapipe-tasks-vision/config.ts'
+import { BlobTracker } from '../src/components/shared/tracking/BlobTracker.ts'
+import type { Detection, TrackerSettings } from '../src/components/shared/tracking/types.ts'
+import { ProcessingTimings, TIMING_SAMPLE_LIMIT, TIMING_LABELS } from '../src/components/mediapipe-tasks-vision/ProcessingTimings.ts'
+
+const TRACKER_SETTINGS: TrackerSettings = {
+  maxMissingDurationMs: 500,
+  maxMatchDistanceRatio: 0.2,
+  trailDurationMs: 1700,
+}
+
+test('MediaPipe bboxをカテゴリ・信頼度・中心・面積を持つDetectionへ変換する', () => {
+  const detections = convertMediaPipeDetections([
+    {
+      boundingBox: { originX: 100, originY: 50, width: 80, height: 200 },
+      categories: [
+        { categoryName: 'car', score: 0.6 },
+        { categoryName: 'person', score: 0.8 },
+      ],
+    },
+  ], new Set(['person']), 640, 480)
+
+  assert.deepEqual(detections, [{
+    categoryName: 'person',
+    score: 0.8,
+    bbox: { x: 100, y: 50, width: 80, height: 200 },
+    center: { x: 140, y: 150 },
+    area: 16000,
+  }])
+})
+
+test('MediaPipe変換は未選択カテゴリ・不正bboxを除外し、画像外bboxを切り詰める', () => {
+  const detections = convertMediaPipeDetections([
+    {
+      boundingBox: { originX: 10, originY: 10, width: 20, height: 20 },
+      categories: [{ categoryName: 'dog', score: 0.9 }],
+    },
+    {
+      boundingBox: { originX: Number.NaN, originY: 0, width: 10, height: 10 },
+      categories: [{ categoryName: 'person', score: 0.9 }],
+    },
+    {
+      boundingBox: { originX: -10, originY: 80, width: 40, height: 40 },
+      categories: [{ categoryName: 'car', score: 0.7 }],
+    },
+  ], new Set(['person', 'car']), 100, 100)
+
+  assert.deepEqual(detections, [{
+    categoryName: 'car',
+    score: 0.7,
+    bbox: { x: 0, y: 80, width: 30, height: 20 },
+    center: { x: 15, y: 90 },
+    area: 600,
+  }])
+})
+
+test('初期カテゴリは人物で、選択肢とMediaPipe asset URLは固定設定に従う', () => {
+  assert.deepEqual(DEFAULT_DETECTION_CATEGORIES, ['person'])
+  assert.deepEqual(DETECTION_CATEGORIES.map((category) => category.value), ['person', 'car', 'bicycle'])
+  assert.deepEqual(resolveMediaPipeAssetUrls('/demo/', 'https://example.com'), {
+    modelUrl: 'https://example.com/demo/mediapipe/models/efficientdet-lite0-int8-v1.tflite',
+    wasmRoot: 'https://example.com/demo/mediapipe/wasm',
+  })
+})
+
+test('Trackerは近接していても異なる検出カテゴリを同じIDへ関連付けない', () => {
+  const tracker = new BlobTracker(640, 480)
+  tracker.update([detection('person', 100)], 0, TRACKER_SETTINGS)
+  assert.equal(tracker.update([detection('person', 105)], 100, TRACKER_SETTINGS)[0].id, 1)
+
+  const tracks = tracker.update([detection('car', 106)], 200, TRACKER_SETTINGS)
+  assert.equal(tracks.find((track) => track.categoryName === 'person')?.state, 'lost')
+  assert.equal(tracker.update([detection('car', 108)], 300, TRACKER_SETTINGS).find((track) => track.categoryName === 'car')?.id, 2)
+})
+
+test('配置したEfficientDet-Lite0モデルは記録済みSHA-256と一致する', async () => {
+  const model = await readFile(new URL('../public/mediapipe/models/efficientdet-lite0-int8-v1.tflite', import.meta.url))
+  assert.equal(
+    createHash('sha256').update(model).digest('hex'),
+    '0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb',
+  )
+})
+
+function detection(categoryName: string, x: number): Detection {
+  return {
+    categoryName,
+    score: 0.8,
+    bbox: { x, y: 100, width: 40, height: 80 },
+    center: { x: x + 20, y: 140 },
+    area: 3200,
+  }
+}
+
+test('非同期検出は900ms間隔でも確定し、初回の未検出から猶予時間を数える', () => {
+  const tracker = new BlobTracker(640, 480)
+  const settings: TrackerSettings = {
+    ...TRACKER_SETTINGS,
+    missingTimeBasis: 'first-miss',
+    maxMissingDurationMs: TRACK_MISSING_TOLERANCE_MS,
+  }
+  tracker.update([detection('person', 100)], 0, settings)
+  for (const time of [900, 1800, 2700]) {
+    const tracks = tracker.update([detection('person', 100)], time, settings)
+    assert.equal(tracks[0].id, 1)
+    assert.equal(tracks[0].state, 'confirmed')
+  }
+  assert.equal(tracker.update([], 3600, settings)[0].state, 'lost')
+  assert.equal(tracker.update([], 4400, settings)[0].id, 1)
+  // An expired ID cannot be revived, even by a nearby detection.
+  assert.equal(tracker.update([detection('person', 100)], 4401, settings).length, 0)
+  assert.equal(tracker.update([detection('person', 100)], 5301, settings)[0].id, 2)
+  assert.equal(tracker.update([], 6201, settings)[0].state, 'lost')
+  assert.equal(tracker.update([detection('person', 100)], 6501, settings)[0].id, 2)
+  // Recovery clears the previous miss timer.
+  assert.equal(tracker.update([detection('person', 100)], 8001, settings)[0].id, 2)
+  tracker.reset()
+  assert.equal(tracker.update([detection('person', 100)], 9001, settings).length, 0)
+})
+
+test('推論画像は拡大せず長辺640に収め、丸め誤差を含め元映像座標へ戻す', () => {
+  for (const [width, height] of [[1280, 720], [720, 1280], [1001, 751], [160, 90]]) {
+    const size = getInferenceSize(width, height)
+    assert.ok(size.width <= 640 && size.height <= 640)
+    assert.ok(size.width <= width && size.height <= height)
+    const [result] = convertMediaPipeDetections([{
+      boundingBox: { originX: size.width / 4, originY: size.height / 4, width: size.width / 2, height: size.height / 2 },
+      categories: [{ categoryName: 'person', score: 0.9 }],
+    }], new Set(['person']), size.width, size.height, width, height)
+    assert.ok(Math.abs(result.bbox.x - width / 4) < 1e-9)
+    assert.ok(Math.abs(result.bbox.y - height / 4) < 1e-9)
+    assert.ok(Math.abs(result.center.x - width / 2) < 1e-9)
+    assert.ok(Math.abs(result.area - width * height / 4) < 1e-6)
+  }
+  assert.deepEqual(getInferenceSize(1280, 720), { width: 640, height: 360 })
+  assert.deepEqual(getInferenceSize(160, 90), { width: 160, height: 90 })
+  assert.throws(() => getInferenceSize(0, 720), RangeError)
+})
+
+test('時間統計は最新120結果に限定し、平均・nearest-rank p95を算出してリセットできる', () => {
+  const timings = new ProcessingTimings()
+  for (let i = 1; i <= TIMING_SAMPLE_LIMIT + 20; i++) {
+    timings.add({ capture: i, roundTrip: 2 * i, inference: i, tracking: i, render: i, total: 3 * i })
+  }
+  const summary = timings.summarize()
+  assert.equal(summary.capture.average, 80.5)
+  assert.equal(summary.capture.p95, 134)
+  assert.equal(summary.roundTrip.average, 161)
+  assert.equal(summary.total.p95, 402)
+  timings.reset()
+  for (const key of Object.keys(TIMING_LABELS) as (keyof typeof TIMING_LABELS)[]) {
+    assert.deepEqual(timings.summarize()[key], { average: 0, p95: 0 })
+  }
+})

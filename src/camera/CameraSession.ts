@@ -8,6 +8,7 @@ export type CameraState = {
     height?: number
     frameRate?: number
     facingMode?: string
+    deviceId?: string
   } | null
 }
 
@@ -44,7 +45,7 @@ export class CameraSession {
     this.getUserMedia = getUserMedia
   }
 
-  async start(): Promise<void> {
+  async start(deviceId?: string): Promise<void> {
     if (this.disposed) return
     const requestId = ++this.requestId
     this.releaseStream()
@@ -53,7 +54,9 @@ export class CameraSession {
     try {
       const stream = await this.getUserMedia({
         video: {
-          facingMode: { ideal: 'environment' },
+          ...(deviceId
+            ? { deviceId: { exact: deviceId } }
+            : { facingMode: { ideal: 'environment' } }),
           width: { ideal: 1280 },
           height: { ideal: 720 },
           frameRate: { ideal: 30, max: 30 },
@@ -96,6 +99,7 @@ export class CameraSession {
             height: this.video.videoHeight || settings.height,
             frameRate: settings.frameRate,
             facingMode: settings.facingMode,
+            ...(settings.deviceId ? { deviceId: settings.deviceId } : {}),
           },
         })
       }

@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { OverlayRenderer } from '../src/rendering/OverlayRenderer.ts'
-import { getAnalysisSize, TrackingEngine } from '../src/tracking/TrackingEngine.ts'
+import { getAnalysisSize, TrackingEngine } from '../src/components/background-subtraction/TrackingEngine.ts'
 import {
   ANALYSIS_LONG_EDGES,
   DEFAULT_ANALYSIS_LONG_EDGE,
   OPENING_KERNEL_SIZES,
   isAnalysisLongEdge,
   type AnalysisLongEdge,
-} from '../src/tracking/analysisConfig.ts'
-import type { Rect, Track, TrackingSettings } from '../src/tracking/types.ts'
+} from '../src/components/background-subtraction/analysisConfig.ts'
+import type { TrackingSettings } from '../src/components/background-subtraction/types.ts'
+import { OverlayRenderer } from '../src/components/shared/tracking/OverlayRenderer.ts'
+import type { Rect, Track } from '../src/components/shared/tracking/types.ts'
 
 const SETTINGS: TrackingSettings = {
   motionThreshold: 20,
@@ -87,9 +88,12 @@ for (const [sourceWidth, sourceHeight, longEdge] of [
     const { width, height } = getAnalysisSize(sourceWidth, sourceHeight, longEdge)
     const renderer = new OverlayRenderer(filtered.canvas, overlay.canvas, width, height)
     renderer.resize(640, 480, 3)
-    assert.equal(filtered.canvas.width, 1280)
+    assert.equal(filtered.canvas.width, 640)
+    assert.equal(filtered.canvas.height, 480)
+    assert.equal(overlay.canvas.width, 1280)
     assert.equal(overlay.canvas.height, 960)
-    assert.deepEqual(filtered.transforms.at(-1), [2, 0, 0, 2, 0, 0])
+    assert.deepEqual(filtered.transforms.at(-1), [1, 0, 0, 1, 0, 0])
+    assert.deepEqual(overlay.transforms.at(-1), [2, 0, 0, 2, 0, 0])
     const bbox = { x: 0, y: 0, width, height }
     const center = { x: width / 2, y: height / 2 }
     const track: Track = {

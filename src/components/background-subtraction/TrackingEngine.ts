@@ -1,9 +1,9 @@
-import { OverlayRenderer } from '../rendering/OverlayRenderer.ts'
-import { BlobTracker } from './BlobTracker.ts'
+import { BlobTracker } from '../shared/tracking/BlobTracker.ts'
+import { OverlayRenderer } from '../shared/tracking/OverlayRenderer.ts'
+import { MAX_FRAME_GAP_MS } from '../shared/tracking/timing.ts'
 import { ConnectedComponents } from './ConnectedComponents.ts'
 import { MotionDetector } from './MotionDetector.ts'
 import type { TrackingSettings } from './types.ts'
-import { MAX_FRAME_GAP_MS } from './timing.ts'
 import {
   DEFAULT_ANALYSIS_LONG_EDGE,
   OPENING_KERNEL_SIZES,

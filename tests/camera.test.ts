@@ -218,3 +218,18 @@ test('取得条件は映像のみで、音声を要求しない', async () => {
   })
   session.dispose()
 })
+
+test('選択したカメラはdeviceIdで明示的に要求する', async () => {
+  let constraints: MediaStreamConstraints | undefined
+  const { session } = setup((value) => {
+    constraints = value
+    return Promise.resolve(streamOf(new FakeTrack()))
+  })
+  await session.start('external-camera')
+  assert.deepEqual(constraints?.video, {
+    deviceId: { exact: 'external-camera' },
+    width: { ideal: 1280 }, height: { ideal: 720 },
+    frameRate: { ideal: 30, max: 30 },
+  })
+  session.dispose()
+})
