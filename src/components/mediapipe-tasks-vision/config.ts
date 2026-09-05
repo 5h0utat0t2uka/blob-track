@@ -14,12 +14,19 @@ export const METRICS_REPORT_INTERVAL_MS = 500
 export const TRACK_MISSING_TOLERANCE_MS = 800
 // Preserve camera display quality; limit only the image sent for inference.
 export const INFERENCE_LONG_EDGE = 640
+export const INFERENCE_LONG_EDGES = [320, 480, 640] as const
+export type InferenceLongEdge = (typeof INFERENCE_LONG_EDGES)[number]
 
-export function getInferenceSize(width: number, height: number): { width: number; height: number } {
+export function isInferenceLongEdge(value: number): value is InferenceLongEdge {
+  return INFERENCE_LONG_EDGES.some(edge => edge === value)
+}
+
+export function getInferenceSize(width: number, height: number, longEdge: InferenceLongEdge = INFERENCE_LONG_EDGE): { width: number; height: number } {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     throw new RangeError('Invalid source dimensions.')
   }
-  const scale = Math.min(1, INFERENCE_LONG_EDGE / Math.max(width, height))
+  if (!isInferenceLongEdge(longEdge)) throw new RangeError('Invalid inference resolution.')
+  const scale = Math.min(1, longEdge / Math.max(width, height))
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) }
 }
 

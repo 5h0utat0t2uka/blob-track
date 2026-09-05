@@ -1,5 +1,5 @@
 import type { Detection } from '../shared/tracking/types.ts'
-import type { DetectionCategory } from './config.ts'
+import type { DetectionCategory, InferenceLongEdge } from './config.ts'
 import { getInferenceSize } from './config.ts'
 import { FrameScheduler } from '../shared/tracking/FrameScheduler.ts'
 import type {
@@ -30,6 +30,7 @@ export class ObjectDetectorClient {
   private readonly worker: Worker
   private readonly callbacks: ObjectDetectorClientCallbacks
   private generation = 0
+  private configurationId = 0
   private ready = false
   private captureInFlight = false
   private inferenceInFlight = false
@@ -55,12 +56,13 @@ export class ObjectDetectorClient {
     scoreThreshold: number,
   ): void {
     this.assertCategories(categories)
-    const generation = this.nextGeneration()
+    this.nextGeneration()
+    const configurationId = ++this.configurationId
     this.ready = false
     this.callbacks.onStatusChange('loading')
     this.post({
       type: 'init',
-      generation,
+      configurationId,
       modelUrl,
       wasmRoot,
       categories,
@@ -70,17 +72,18 @@ export class ObjectDetectorClient {
 
   configure(categories: readonly DetectionCategory[], scoreThreshold: number): void {
     this.assertCategories(categories)
-    const generation = this.nextGeneration()
+    this.nextGeneration()
+    const configurationId = ++this.configurationId
     this.ready = false
     this.callbacks.onStatusChange('loading')
-    this.post({ type: 'configure', generation, categories, scoreThreshold })
+    this.post({ type: 'configure', configurationId, categories, scoreThreshold })
   }
 
   beginSession(): void {
     this.nextGeneration()
   }
 
-  async submitFrame(video: HTMLVideoElement, timestampMs: number, targetFps: number): Promise<void> {
+  async submitFrame(video: HTMLVideoElement, timestampMs: number, targetFps: number, longEdge?: InferenceLongEdge): Promise<void> {
     if (this.disposed || !this.ready) return
     // Check capacity before consuming a scheduling deadline. No frame queue.
     if (this.captureInFlight || this.inferenceInFlight) {
@@ -99,7 +102,7 @@ export class ObjectDetectorClient {
       const startedAtMs = performance.now()
       const sourceWidth = video.videoWidth
       const sourceHeight = video.videoHeight
-      const size = getInferenceSize(sourceWidth, sourceHeight)
+      const size = getInferenceSize(sourceWidth, sourceHeight, longEdge)
       bitmap = await createImageBitmap(video, {
         resizeWidth: size.width,
         resizeHeight: size.height,
@@ -159,21 +162,34 @@ export class ObjectDetectorClient {
       return
     }
     if (message.type === 'ready' || message.type === 'configured') {
-      if (!this.disposed && message.generation === this.generation) {
+      if (!this.disposed && message.configurationId === this.configurationId) {
         this.ready = true
         this.inferenceInFlight = false
         this.callbacks.onStatusChange('ready')
       }
       return
     }
-    this.inferenceInFlight = false
-    if (!this.disposed && message.generation === this.generation) {
+    if (message.scope === 'dispose') {
+      this.terminate()
+      return
+    }
+    if (message.scope === 'frame') {
+      this.inferenceInFlight = false
+      this.pendingTiming = null
+    }
+    const current = message.scope === 'configuration'
+      ? message.configurationId === this.configurationId
+      : message.generation === this.generation
+    if (!this.disposed && current) {
+      this.ready = false
       this.callbacks.onStatusChange('error', message.message)
     }
   }
 
   private readonly handleWorkerError = (event: ErrorEvent): void => {
     this.inferenceInFlight = false
+    this.pendingTiming = null
+    this.ready = false
     if (!this.disposed) {
       this.callbacks.onStatusChange('error', event.message || 'Object Detector worker failed.')
     }

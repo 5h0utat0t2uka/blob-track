@@ -4,7 +4,7 @@ import type { DetectionCategory } from './config.ts'
 export type DetectorWorkerRequest =
   | {
       type: 'init'
-      generation: number
+      configurationId: number
       modelUrl: string
       wasmRoot: string
       categories: readonly DetectionCategory[]
@@ -12,7 +12,7 @@ export type DetectorWorkerRequest =
     }
   | {
       type: 'configure'
-      generation: number
+      configurationId: number
       categories: readonly DetectionCategory[]
       scoreThreshold: number
     }
@@ -27,8 +27,8 @@ export type DetectorWorkerRequest =
   | { type: 'dispose' }
 
 export type DetectorWorkerResponse =
-  | { type: 'ready'; generation: number }
-  | { type: 'configured'; generation: number }
+  | { type: 'ready'; configurationId: number }
+  | { type: 'configured'; configurationId: number }
   | {
       type: 'result'
       generation: number
@@ -38,5 +38,7 @@ export type DetectorWorkerResponse =
       detections: Detection[]
       inferenceTimeMs: number
     }
-  | { type: 'error'; generation: number; message: string }
+  | { type: 'error'; scope: 'configuration'; configurationId: number; message: string }
+  | { type: 'error'; scope: 'frame'; generation: number; message: string }
+  | { type: 'error'; scope: 'dispose'; message: string }
   | { type: 'disposed' }

@@ -16,6 +16,10 @@ import {
   DEFAULT_SCORE_THRESHOLD,
   DETECTION_CATEGORIES,
   INFERENCE_FPS_OPTIONS,
+  INFERENCE_LONG_EDGE,
+  INFERENCE_LONG_EDGES,
+  isInferenceLongEdge,
+  type InferenceLongEdge,
   METRICS_REPORT_INTERVAL_MS,
   TRACK_MISSING_TOLERANCE_MS,
   resolveMediaPipeAssetUrls,
@@ -25,7 +29,8 @@ import {
   ObjectDetectorClient,
   type ObjectDetectorResult,
 } from '../components/mediapipe-tasks-vision/ObjectDetectorClient.ts'
-import { ProcessingTimings, TIMING_LABELS, type TimingSummary } from '../components/mediapipe-tasks-vision/ProcessingTimings.ts'
+import { ProcessingTimings } from '../components/shared/ProcessingTimings.ts'
+import { TIMING_LABELS, type TimingSummary } from '../components/mediapipe-tasks-vision/timingConfig.ts'
 
 const TRACKER_SETTINGS: TrackerSettings = {
   missingTimeBasis: 'first-miss',
@@ -49,7 +54,7 @@ type MediaPipeMetrics = {
 const INITIAL_METRICS: MediaPipeMetrics = {
   cameraFps: 0,
   inferenceFps: 0,
-  timings: new ProcessingTimings().summarize(),
+  timings: new ProcessingTimings(TIMING_LABELS).summarize(),
   detectionCount: 0,
   trackCount: 0,
   busyFrames: 0,
@@ -67,18 +72,22 @@ export function MediaPipeTrackerPage() {
   const stageRef = useRef<HTMLElement>(null)
   const rendererRef = useRef<OverlayRenderer | null>(null)
   const trackerRef = useRef<BlobTracker | null>(null)
+  const pendingDrawRef = useRef<number | null>(null)
   const detectorRef = useRef<ObjectDetectorClient | null>(null)
   const sourceSizeRef = useRef({ width: 0, height: 0 })
   const showTrailRef = useRef(true)
+  const showGrayscaleRef = useRef(true)
   const inferenceFpsRef = useRef(DEFAULT_INFERENCE_FPS)
   const accumulatorRef = useRef(createAccumulator())
-  const [timings] = useState(() => new ProcessingTimings())
+  const [timings] = useState(() => new ProcessingTimings(TIMING_LABELS))
   const initialConfigurationKey = `${DEFAULT_DETECTION_CATEGORIES.join(',')}:${DEFAULT_SCORE_THRESHOLD}`
   const previousConfigurationRef = useRef(initialConfigurationKey)
   const [categories, setCategories] = useState<DetectionCategory[]>([...DEFAULT_DETECTION_CATEGORIES])
   const [scoreThreshold, setScoreThreshold] = useState(DEFAULT_SCORE_THRESHOLD)
   const [inferenceFps, setInferenceFps] = useState(DEFAULT_INFERENCE_FPS)
   const [showTrail, setShowTrail] = useState(true)
+  const [showGrayscale, setShowGrayscale] = useState(true)
+  const [inferenceLongEdge, setInferenceLongEdge] = useState<InferenceLongEdge>(INFERENCE_LONG_EDGE)
   const [selectedDeviceId, setSelectedDeviceId] = useState('')
   const [detectorStatus, setDetectorStatus] = useState<DetectorStatus>('loading')
   const [detectorError, setDetectorError] = useState<string | null>(null)
@@ -86,6 +95,7 @@ export function MediaPipeTrackerPage() {
   const camera = useCamera(videoRef)
 
   showTrailRef.current = showTrail
+  showGrayscaleRef.current = showGrayscale
   inferenceFpsRef.current = inferenceFps
 
   useEffect(() => {
@@ -130,6 +140,7 @@ export function MediaPipeTrackerPage() {
       renderer.clear()
       rendererRef.current = null
       trackerRef.current = null
+      pendingDrawRef.current = null
       detectorRef.current = null
     }
   }, [])
@@ -140,6 +151,7 @@ export function MediaPipeTrackerPage() {
     const timer = window.setTimeout(() => {
       previousConfigurationRef.current = configurationKey
       trackerRef.current?.reset()
+      pendingDrawRef.current = null
       rendererRef.current?.clear()
       accumulatorRef.current = createAccumulator()
       timings.reset()
@@ -156,6 +168,7 @@ export function MediaPipeTrackerPage() {
       if (sourceSizeRef.current.width > 0) detector?.beginSession()
       sourceSizeRef.current = { width: 0, height: 0 }
       trackerRef.current?.reset()
+      pendingDrawRef.current = null
       rendererRef.current?.clear()
       timings.reset()
       setMetrics(INITIAL_METRICS)
@@ -179,6 +192,7 @@ export function MediaPipeTrackerPage() {
       if (width <= 0 || height <= 0) return
       sourceSizeRef.current = { width, height }
       trackerRef.current = new BlobTracker(width, height)
+      pendingDrawRef.current = null
       rendererRef.current?.setAnalysisSize(width, height)
       rendererRef.current?.clear()
       detector.beginSession()
@@ -213,7 +227,27 @@ export function MediaPipeTrackerPage() {
 
       if (document.visibilityState === 'visible') {
         accumulatorRef.current.cameraFrames += 1
-        void detector.submitFrame(video, metadata.presentationTime, inferenceFpsRef.current)
+        void detector.submitFrame(video, metadata.presentationTime, inferenceFpsRef.current, inferenceLongEdge)
+        // Observations update the tracker only in handleResult(). This redraws
+        // the live video using the most recent boxes, independently of inference.
+        const renderer = rendererRef.current
+        if (renderer) {
+          const startedAt = performance.now()
+          try {
+            renderer.render(trackerRef.current?.getTracks() ?? [], video, showTrailRef.current, showGrayscaleRef.current)
+          } catch (error) {
+            active = false
+            setDetectorError(error instanceof Error ? error.message : 'Failed to render tracking results.')
+            camera.stop()
+            return
+          }
+          const renderedAt = performance.now()
+          timings.add({ render: renderedAt - startedAt })
+          if (pendingDrawRef.current !== null) {
+            timings.add({ total: renderedAt - pendingDrawRef.current })
+            pendingDrawRef.current = null
+          }
+        }
         report(now)
       }
       callbackId = video.requestVideoFrameCallback(processFrame)
@@ -233,9 +267,11 @@ export function MediaPipeTrackerPage() {
       video.removeEventListener('resize', resetSource)
       if (callbackId !== null) video.cancelVideoFrameCallback(callbackId)
       trackerRef.current?.reset()
+      pendingDrawRef.current = null
+      detector.beginSession()
       rendererRef.current?.clear()
     }
-  }, [camera.status, camera.stop, detectorStatus, timings])
+  }, [camera.status, camera.stop, detectorStatus, timings, inferenceLongEdge])
 
   function handleResult(result: ObjectDetectorResult): void {
     const video = videoRef.current
@@ -247,16 +283,13 @@ export function MediaPipeTrackerPage() {
 
     const trackingStartedAt = performance.now()
     const tracks = tracker.update(result.detections, result.timestampMs, TRACKER_SETTINGS)
-    const renderStartedAt = performance.now()
-    renderer.render(tracks, video, showTrailRef.current)
-    const renderedAt = performance.now()
+    const trackedAt = performance.now()
+    pendingDrawRef.current = result.startedAtMs
     timings.add({
       capture: result.captureTimeMs,
       roundTrip: result.roundTripTimeMs,
       inference: result.inferenceTimeMs,
-      tracking: renderStartedAt - trackingStartedAt,
-      render: renderedAt - renderStartedAt,
-      total: renderedAt - result.startedAtMs,
+      tracking: trackedAt - trackingStartedAt,
     })
     const accumulator = accumulatorRef.current
     accumulator.inferenceFrames += 1
@@ -398,6 +431,23 @@ export function MediaPipeTrackerPage() {
         <div className="option-row">
           <label htmlFor="show-ai-trail">Trail lines</label>
           <input id="show-ai-trail" type="checkbox" checked={showTrail} onChange={(event) => setShowTrail(event.target.checked)} />
+        </div>
+
+        <div className="option-row">
+          <label htmlFor="inference-resolution">Inference resolution</label>
+          <select id="inference-resolution" value={inferenceLongEdge} onChange={event => {
+            const value = Number(event.target.value)
+            if (isInferenceLongEdge(value)) setInferenceLongEdge(value)
+          }}>
+            {INFERENCE_LONG_EDGES.map(edge => <option key={edge} value={edge}>{edge} px</option>)}
+          </select>
+        </div>
+        <div className="option-row">
+          <label htmlFor="show-ai-grayscale">Grayscale regions</label>
+          <input id="show-ai-grayscale" type="checkbox" checked={showGrayscale} onChange={event => {
+            setShowGrayscale(event.target.checked)
+            timings.reset()
+          }} />
         </div>
 
         {(camera.error || detectorError) && <p className="error-message" role="alert">{camera.error ?? detectorError}</p>}

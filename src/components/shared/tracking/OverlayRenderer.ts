@@ -76,6 +76,7 @@ export class OverlayRenderer {
     tracks: readonly Track[],
     video: HTMLVideoElement,
     showTrail: boolean,
+    showGrayscale = true,
   ): void {
     this.clear()
     const sourceWidth = video.videoWidth
@@ -86,7 +87,7 @@ export class OverlayRenderer {
 
     const transform = this.createCoverTransform(sourceWidth, sourceHeight)
     for (const track of tracks) {
-      if (track.state === 'confirmed') {
+      if (showGrayscale && track.state === 'confirmed') {
         this.drawGrayscaleRegion(video, track.bbox, transform)
       }
     }

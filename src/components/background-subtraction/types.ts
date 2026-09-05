@@ -8,6 +8,7 @@ export type BackgroundDetectionSettings = {
 
 export type RenderSettings = {
   showTrail: boolean
+  showGrayscale?: boolean
 }
 
 export type TrackingSettings = TrackerSettings & BackgroundDetectionSettings & RenderSettings

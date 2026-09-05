@@ -1,6 +1,7 @@
 import { BlobTracker } from '../shared/tracking/BlobTracker.ts'
 import { OverlayRenderer } from '../shared/tracking/OverlayRenderer.ts'
 import { MAX_FRAME_GAP_MS } from '../shared/tracking/timing.ts'
+import { ProcessingTimings } from '../shared/ProcessingTimings.ts'
 import { ConnectedComponents } from './ConnectedComponents.ts'
 import { MotionDetector } from './MotionDetector.ts'
 import type { TrackingSettings } from './types.ts'
@@ -10,6 +11,15 @@ import {
   isAnalysisLongEdge,
   type AnalysisLongEdge,
 } from './analysisConfig.ts'
+
+export const BACKGROUND_TIMING_LABELS = {
+  capture: 'CAPTURE',
+  motion: 'BACKGROUND / OPENING',
+  components: 'BLOB EXTRACTION',
+  tracking: 'TRACKING TIME',
+  render: 'DRAW SUBMISSION',
+  total: 'PROCESSING',
+} as const
 
 export type FrameResult = {
   trackCount: number
@@ -65,6 +75,15 @@ export class TrackingEngine {
   private analysisLongEdge: AnalysisLongEdge = DEFAULT_ANALYSIS_LONG_EDGE
   private previousTimestampMs: number | null = null
   private lastResult: FrameResult = INITIAL_RESULT
+  private readonly timings = new ProcessingTimings(BACKGROUND_TIMING_LABELS)
+
+  getTimingSummary() {
+    return this.timings.summarize()
+  }
+
+  resetTimings(): void {
+    this.timings.reset()
+  }
 
   constructor(
     analysisCanvas: HTMLCanvasElement,
@@ -94,6 +113,7 @@ export class TrackingEngine {
   }
 
   reset(): void {
+    this.resetTimings()
     this.pipeline?.motionDetector.reset()
     this.pipeline?.blobTracker.reset()
     this.overlayRenderer.clear()
@@ -157,6 +177,7 @@ export class TrackingEngine {
     }
     const elapsedMs = this.previousTimestampMs === null ? 0 : timestampMs - this.previousTimestampMs
     this.previousTimestampMs = timestampMs
+    const startedAt = performance.now()
     this.analysisContext.drawImage(
       video,
       0,
@@ -170,14 +191,19 @@ export class TrackingEngine {
       pipeline.width,
       pipeline.height,
     )
+    const capturedAt = performance.now()
     const motion = pipeline.motionDetector.process(frame, elapsedMs, {
       threshold: settings.motionThreshold,
       backgroundTimeConstantMs: settings.backgroundTimeConstantMs,
     })
+    const motionCompletedAt = performance.now()
+    this.timings.add({ capture: capturedAt - startedAt, motion: motionCompletedAt - capturedAt })
 
     if (motion.isCalibrating) {
       pipeline.blobTracker.reset()
       this.overlayRenderer.clear()
+      const clearedAt = performance.now()
+      this.timings.add({ render: clearedAt - motionCompletedAt, total: clearedAt - startedAt })
       this.lastResult = {
         trackCount: 0,
         detectionCount: 0,
@@ -195,12 +221,22 @@ export class TrackingEngine {
           settings.minBlobAreaRatio,
       ),
     )
+    const componentsStartedAt = performance.now()
     const detections = pipeline.connectedComponents.extract(
       motion.mask,
       minimumArea,
     )
+    const componentsCompletedAt = performance.now()
     const tracks = pipeline.blobTracker.update(detections, timestampMs, settings)
-    this.overlayRenderer.render(tracks, video, settings.showTrail)
+    const trackedAt = performance.now()
+    this.overlayRenderer.render(tracks, video, settings.showTrail, settings.showGrayscale)
+    const renderedAt = performance.now()
+    this.timings.add({
+      components: componentsCompletedAt - componentsStartedAt,
+      tracking: trackedAt - componentsCompletedAt,
+      render: renderedAt - trackedAt,
+      total: renderedAt - startedAt,
+    })
 
     this.lastResult = {
       trackCount: tracks.filter((track) => track.state === 'confirmed').length,

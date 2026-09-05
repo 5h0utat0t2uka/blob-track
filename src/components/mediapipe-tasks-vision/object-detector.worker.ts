@@ -22,8 +22,15 @@ let queue = Promise.resolve()
 
 workerScope.onmessage = (event) => {
   queue = queue.then(() => handleRequest(event.data)).catch((error: unknown) => {
-    const generation = 'generation' in event.data ? event.data.generation : 0
-    post({ type: 'error', generation, message: errorMessage(error) })
+    const request = event.data
+    const message = errorMessage(error)
+    if (request.type === 'init' || request.type === 'configure') {
+      post({ type: 'error', scope: 'configuration', configurationId: request.configurationId, message })
+    } else if (request.type === 'frame') {
+      post({ type: 'error', scope: 'frame', generation: request.generation, message })
+    } else {
+      post({ type: 'error', scope: 'dispose', message })
+    }
   })
 }
 
@@ -47,7 +54,7 @@ async function handleRequest(request: DetectorWorkerRequest): Promise<void> {
         categoryAllowlist: [...categories],
         scoreThreshold: request.scoreThreshold,
       })
-      post({ type: 'ready', generation: request.generation })
+      post({ type: 'ready', configurationId: request.configurationId })
       return
     }
     case 'configure': {
@@ -57,7 +64,7 @@ async function handleRequest(request: DetectorWorkerRequest): Promise<void> {
         categoryAllowlist: [...categories],
         scoreThreshold: request.scoreThreshold,
       })
-      post({ type: 'configured', generation: request.generation })
+      post({ type: 'configured', configurationId: request.configurationId })
       return
     }
     case 'frame': {
