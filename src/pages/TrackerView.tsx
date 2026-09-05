@@ -57,6 +57,7 @@ export function TrackerView() {
   const settingsRef = useRef(DEFAULT_SETTINGS)
   const targetFpsRef = useRef(30)
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const [selectedDeviceId, setSelectedDeviceId] = useState('')
   const [targetFps, setTargetFps] = useState(30)
   const [analysisLongEdge, setAnalysisLongEdge] = useState<AnalysisLongEdge>(DEFAULT_ANALYSIS_LONG_EDGE)
   const [metrics, setMetrics] = useState(INITIAL_METRICS)
@@ -218,6 +219,7 @@ export function TrackerView() {
   }, [camera.status, camera.stop, analysisLongEdge])
 
   const statusText = getStatusText(camera.status, metrics.isCalibrating)
+  const cameraActive = camera.status === 'running' || camera.status === 'suspended' || camera.status === 'requesting'
   // const cameraDescription = camera.info
   //   ? [
   //       camera.info.width && camera.info.height
@@ -358,7 +360,25 @@ export function TrackerView() {
             }
           />
         </div>
-
+        <div className="option-row">
+          <label htmlFor="camera-device">Camera</label>
+          <select
+            id="camera-device"
+            value={camera.info?.deviceId ?? selectedDeviceId}
+            onChange={(event) => {
+              const deviceId = event.target.value
+              setSelectedDeviceId(deviceId)
+              if (cameraActive) void camera.start(deviceId || undefined)
+            }}
+          >
+            <option value="">Default camera</option>
+            {camera.devices.map((device, index) => (
+              <option key={device.deviceId} value={device.deviceId}>
+                {device.label || `Camera ${index + 1}`}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="option-row">
           <label htmlFor="analysis-rate">Frame rate limit</label>
           <select
@@ -371,7 +391,6 @@ export function TrackerView() {
             <option value={15}>15 fps</option>
           </select>
         </div>
-
         <div className="option-row">
           <label htmlFor="analysis-resolution">Analysis resolution</label>
           <select
