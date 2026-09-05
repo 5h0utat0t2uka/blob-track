@@ -1,6 +1,6 @@
 import type { Detection } from '../shared/tracking/types.ts'
-import type { DetectionCategory, InferenceLongEdge } from './config.ts'
-import { getInferenceSize } from './config.ts'
+import type { DetectionCategory, InferenceBackend, InferenceLongEdge } from './config.ts'
+import { DEFAULT_INFERENCE_BACKEND, getInferenceSize } from './config.ts'
 import { FrameScheduler } from '../shared/tracking/FrameScheduler.ts'
 import type {
   DetectorWorkerRequest,
@@ -54,6 +54,7 @@ export class ObjectDetectorClient {
     wasmRoot: string,
     categories: readonly DetectionCategory[],
     scoreThreshold: number,
+    backend: InferenceBackend = DEFAULT_INFERENCE_BACKEND,
   ): void {
     this.assertCategories(categories)
     this.nextGeneration()
@@ -62,6 +63,7 @@ export class ObjectDetectorClient {
     this.callbacks.onStatusChange('loading')
     this.post({
       type: 'init',
+      backend,
       configurationId,
       modelUrl,
       wasmRoot,

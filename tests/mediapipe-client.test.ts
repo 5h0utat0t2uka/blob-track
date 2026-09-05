@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test, { type TestContext } from 'node:test'
 import { ObjectDetectorClient, type ObjectDetectorResult } from '../src/components/mediapipe-tasks-vision/ObjectDetectorClient.ts'
 import type { DetectorWorkerRequest, DetectorWorkerResponse } from '../src/components/mediapipe-tasks-vision/protocol.ts'
+import { resolveMediaPipeAssetUrls, type InferenceBackend, type DetectionCategory } from '../src/components/mediapipe-tasks-vision/config.ts'
 
 type FrameRequest = Extract<DetectorWorkerRequest, { type: 'frame' }>
 
@@ -52,13 +53,20 @@ function fixture(t: TestContext) {
   const results: ObjectDetectorResult[] = []
   const skipped: string[] = []
   const statuses: string[] = []
-  const client = new ObjectDetectorClient({
-    onResult: result => results.push(result),
-    onStatusChange: status => statuses.push(status),
-    onSkippedFrame: reason => skipped.push(reason),
-  })
-  const worker = workers[0]
-  client.initialize('/model', '/wasm', ['person'], 0.7)
+  const clients: { client: ObjectDetectorClient; worker: FakeWorker }[] = []
+  const createClient = (backend: InferenceBackend, categories: readonly DetectionCategory[] = ['person'], scoreThreshold = 0.7) => {
+    const client = new ObjectDetectorClient({
+      onResult: result => results.push(result),
+      onStatusChange: status => statuses.push(status),
+      onSkippedFrame: reason => skipped.push(reason),
+    })
+    const worker = workers.at(-1)!
+    const assets = resolveMediaPipeAssetUrls('/', 'https://example.com', backend)
+    client.initialize(assets.modelUrl, assets.wasmRoot, categories, scoreThreshold, backend)
+    clients.push({ client, worker })
+    return { client, worker }
+  }
+  const { client, worker } = createClient('cpu-int8')
   const init = worker.sent[0]
   assert.equal(init.type, 'init')
   worker.reply({ type: 'ready', configurationId: init.configurationId })
@@ -69,11 +77,13 @@ function fixture(t: TestContext) {
   })
   const frames = () => worker.sent.filter((message): message is FrameRequest => message.type === 'frame')
   t.after(() => {
-    client.dispose()
-    worker.reply({ type: 'disposed' })
+    for (const { client, worker } of clients) {
+      client.dispose()
+      worker.reply({ type: 'disposed' })
+    }
     for (const restore of restoreGlobals) restore()
   })
-  return { client, worker, video, captures, results, skipped, statuses, finish, frames,
+  return { client, worker, video, captures, results, skipped, statuses, finish, frames, createClient,
     setTime(value: number) { time = value },
     delayCapture(value: Promise<void>) { captureDelay = value },
   }
@@ -217,4 +227,71 @@ test('モデル初期化中のセッション変更でreadyを失わず、dispos
   f.client.dispose()
   f.worker.reply({ type: 'configured', configurationId: config.configurationId })
   assert.equal(f.statuses.length, count)
+})
+
+test('CPUからGPUへの切り替えで設定を引き継ぎ、旧Workerの結果とエラーを無視する', async t => {
+  const f = fixture(t)
+  await f.client.submitFrame(f.video, 0, 10)
+  f.client.dispose()
+  const gpu = f.createClient('gpu-float16', ['car', 'bicycle'], 0.85)
+  const init = gpu.worker.sent[0]
+  assert.equal(init.type, 'init')
+  assert.equal(init.backend, 'gpu-float16')
+  assert.ok(init.modelUrl.endsWith('efficientdet-lite0-float16-v1.tflite'))
+  assert.deepEqual(init.categories, ['car', 'bicycle'])
+  assert.equal(init.scoreThreshold, 0.85)
+  const count = f.statuses.length
+  f.finish(f.frames()[0])
+  f.worker.reply({ type: 'error', scope: 'configuration', configurationId: 1, message: 'old error' })
+  assert.equal(f.results.length, 0)
+  assert.equal(f.statuses.length, count)
+  await gpu.client.submitFrame(f.video, 100, 10)
+  assert.equal(gpu.worker.sent.length, 1)
+  gpu.client.beginSession() // Stop/camera switch while GPU initializes.
+  gpu.worker.reply({ type: 'ready', configurationId: init.configurationId })
+  assert.equal(f.statuses.at(-1), 'ready')
+  await gpu.client.submitFrame(f.video, 200, 10)
+  assert.equal(gpu.worker.sent.at(-1)?.type, 'frame')
+  f.worker.reply({ type: 'disposed' })
+  assert.equal(f.worker.terminated, true)
+  assert.equal(gpu.worker.terminated, false)
+})
+
+test('GPU初期化の失敗と再切り替えから新しいCPU Workerで復帰できる', async t => {
+  const f = fixture(t)
+  f.client.dispose()
+  const gpu = f.createClient('gpu-float16')
+  gpu.worker.reply({ type: 'error', scope: 'configuration', configurationId: 1, message: 'GPU unavailable' })
+  assert.equal(f.statuses.at(-1), 'error')
+  await gpu.client.submitFrame(f.video, 0, 10)
+  assert.equal(f.captures.length, 0)
+  gpu.client.dispose()
+  const cpu = f.createClient('cpu-int8', ['car'], 0.8)
+  const count = f.statuses.length
+  gpu.worker.reply({ type: 'ready', configurationId: 1 })
+  assert.equal(f.statuses.length, count)
+  cpu.worker.reply({ type: 'ready', configurationId: 1 })
+  await cpu.client.submitFrame(f.video, 100, 10)
+  assert.equal(cpu.worker.sent.at(-1)?.type, 'frame')
+  const init = cpu.worker.sent[0]
+  assert.equal(init.type, 'init')
+  assert.equal(init.backend, 'cpu-int8')
+  assert.deepEqual(init.categories, ['car'])
+  assert.equal(init.scoreThreshold, 0.8)
+})
+
+test('モデル切り替え中の画像取得を解放し、新Workerへ混入させない', async t => {
+  const f = fixture(t)
+  let release!: () => void
+  f.delayCapture(new Promise<void>(resolve => { release = resolve }))
+  const capture = f.client.submitFrame(f.video, 0, 10)
+  f.client.dispose()
+  const gpu = f.createClient('gpu-float16')
+  gpu.worker.reply({ type: 'ready', configurationId: 1 })
+  release()
+  await capture
+  assert.equal(f.captures[0].closed, true)
+  assert.equal(f.frames().length, 0)
+  await gpu.client.submitFrame(f.video, 100, 10)
+  assert.equal(gpu.worker.sent.at(-1)?.type, 'frame')
 })

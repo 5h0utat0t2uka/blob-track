@@ -12,6 +12,7 @@ git-hooks.lib.${system}.run {
       excludes = [
         "^docs/blob-tracking-visualization\\.png$"
         "^public/mediapipe/models/efficientdet-lite0-int8-v1\\.tflite$"
+        "^public/mediapipe/models/efficientdet-lite0-float16-v1\\.tflite$"
       ];
     };
     node-tests = {

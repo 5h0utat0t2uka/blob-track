@@ -8,7 +8,7 @@ import type {
   DetectorWorkerRequest,
   DetectorWorkerResponse,
 } from './protocol.ts'
-import type { DetectionCategory } from './config.ts'
+import { INFERENCE_BACKENDS, type DetectionCategory } from './config.ts'
 
 type WorkerScope = {
   onmessage: ((event: MessageEvent<DetectorWorkerRequest>) => void) | null
@@ -49,7 +49,7 @@ async function handleRequest(request: DetectorWorkerRequest): Promise<void> {
       }
       const model = new Uint8Array(await modelResponse.arrayBuffer())
       detector = await ObjectDetector.createFromOptions(vision, {
-        baseOptions: { modelAssetBuffer: model, delegate: 'CPU' },
+        baseOptions: { modelAssetBuffer: model, delegate: INFERENCE_BACKENDS[request.backend].delegate },
         runningMode: 'VIDEO',
         categoryAllowlist: [...categories],
         scoreThreshold: request.scoreThreshold,
