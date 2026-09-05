@@ -10,6 +10,7 @@ import {
 } from '../src/components/background-subtraction/analysisConfig.ts'
 import type { TrackingSettings } from '../src/components/background-subtraction/types.ts'
 import { OverlayRenderer } from '../src/components/shared/tracking/OverlayRenderer.ts'
+import { BlobTracker } from '../src/components/shared/tracking/BlobTracker.ts'
 import type { Rect, Track } from '../src/components/shared/tracking/types.ts'
 
 const SETTINGS: TrackingSettings = {
@@ -21,6 +22,62 @@ const SETTINGS: TrackingSettings = {
   trailDurationMs: 1700,
   showTrail: true,
 }
+
+test('映像の再描画は観測回数・時刻・追跡状態を変更せず、グレースケールだけ無効化できる', () => {
+  const tracker = new BlobTracker(640, 480)
+  const bbox = { x: 100, y: 100, width: 40, height: 80 }
+  const observation = { bbox, center: { x: 120, y: 140 }, area: 3200 }
+  tracker.update([observation], 0, SETTINGS)
+  assert.equal(tracker.getTracks().length, 0)
+  tracker.update([observation], 100, SETTINGS)
+  const before = structuredClone(tracker.getTracks())
+  const filtered = canvasFixture()
+  const overlay = canvasFixture()
+  const renderer = new OverlayRenderer(filtered.canvas, overlay.canvas, 640, 480)
+  renderer.resize(640, 480, 1)
+  const video = { videoWidth: 640, videoHeight: 480 } as HTMLVideoElement
+  for (let frame = 0; frame < 30; frame++) renderer.render(tracker.getTracks(), video, true)
+  assert.equal(filtered.drawCalls.length, 30)
+  assert.deepEqual(tracker.getTracks(), before)
+  renderer.render(tracker.getTracks(), video, true, false)
+  assert.equal(filtered.drawCalls.length, 30)
+  assert.equal(overlay.boxes.length, 31)
+  assert.equal(filtered.clears, overlay.clears)
+  tracker.reset()
+  assert.deepEqual(tracker.getTracks(), [])
+})
+
+test('背景差分は実行した区間だけ計測し、重複フレームは統計を増やさずリセットで消去する', (t) => {
+  let clock = 0
+  t.mock.method(performance, 'now', () => ++clock)
+  const engine = new TrackingEngine(canvasFixture().canvas, canvasFixture().canvas, canvasFixture().canvas)
+  const video = { videoWidth: 5, videoHeight: 5 } as HTMLVideoElement
+  assert.equal(engine.process(video, 0, SETTINGS).isCalibrating, true)
+  const warmup = engine.getTimingSummary()
+  assert.deepEqual(warmup.capture, { average: 1, p95: 1 })
+  assert.deepEqual(warmup.motion, { average: 1, p95: 1 })
+  assert.deepEqual(warmup.components, { average: 0, p95: 0 })
+  assert.deepEqual(warmup.tracking, { average: 0, p95: 0 })
+  for (let timestamp = 100; timestamp <= 800; timestamp += 100) engine.process(video, timestamp, SETTINGS)
+  const summary = engine.getTimingSummary()
+  for (const key of ['capture', 'motion', 'components', 'tracking', 'render'] as const) {
+    assert.deepEqual(summary[key], { average: 1, p95: 1 })
+  }
+  assert.ok(summary.total.average > 1)
+  const calls = clock
+  engine.process(video, 800, SETTINGS)
+  assert.equal(clock, calls)
+  assert.deepEqual(engine.getTimingSummary(), summary)
+  engine.resetTimings()
+  for (const timing of Object.values(engine.getTimingSummary())) {
+    assert.deepEqual(timing, { average: 0, p95: 0 })
+  }
+  // Resetting statistics alone must not restart background calibration.
+  assert.equal(engine.process(video, 900, SETTINGS).isCalibrating, false)
+  engine.reset()
+  assert.equal(engine.getTimingSummary().total.average, 0)
+  assert.equal(engine.process(video, 1000, SETTINGS).isCalibrating, true)
+})
 
 // Record drawing operations without relying on a browser or real camera.
 function canvasFixture() {

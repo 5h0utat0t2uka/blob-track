@@ -64,24 +64,40 @@
 }*/
 
 .metrics {
+  z-index: 3;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  gap: 1.5rem;
+  margin: auto;
+  padding: 1.2rem;
+  font-family: ui-monospace,monospace;
+  display: flex;
   position: fixed;
+  inset-block-end: max(1rem, env(safe-area-inset-bottom));
+  overflow: auto;
+  max-inline-size: calc(100cqi - 4rem);
+  inset-inline-start: 0;
+  inset-inline-end: 0;
+  border-radius: 8px;
+  background: color-mix(in oklab, black 50%, transparent);
+  backdrop-filter: blur(16px);
+  /*position: fixed;
   z-index: 3;
   overflow: auto;
   inset-block-end: max(1rem, env(safe-area-inset-bottom));
   inset-inline-start: max(1rem, env(safe-area-inset-left));
   display: flex;
-  /*flex-wrap: wrap;*/
   gap: 1.5rem;
   max-inline-size: calc(100vw - 2rem);
   margin: 0;
   padding: 0.75rem;
   color: #fff;
   font-family: ui-monospace, monospace;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;*/
   > * {
     white-space: nowrap;
     &:last-child {
-      margin-inline-end: 1.5rem;
+      margin-inline-end: .5rem;
     }
   }
 }
@@ -135,7 +151,7 @@
     margin: 0;
     margin-inline-end: auto;
     font-family: ui-monospace, monospace;
-    font-size: 0.8rem;
+    /*font-size: 0.8rem;*/
     a {
       color: #fff;
       text-decoration-thickness: 0.5px;

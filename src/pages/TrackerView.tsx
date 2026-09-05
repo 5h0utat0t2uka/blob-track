@@ -4,6 +4,7 @@ import { useCamera } from '../hooks/useCamera.ts'
 import type { CameraStatus } from '../camera/CameraSession.ts'
 import {
   TrackingEngine,
+  BACKGROUND_TIMING_LABELS,
   type FrameResult,
 } from '../components/background-subtraction/TrackingEngine.ts'
 import type { TrackingSettings } from '../components/background-subtraction/types.ts'
@@ -20,6 +21,7 @@ import {
   RangeControl,
   SettingsIcon,
 } from '../components/shared/TrackerControls.tsx'
+import { ProcessingTimings, type TimingSummary } from '../components/shared/ProcessingTimings.ts'
 
 const DEFAULT_SETTINGS: TrackingSettings = {
   motionThreshold: 70,
@@ -29,11 +31,12 @@ const DEFAULT_SETTINGS: TrackingSettings = {
   maxMatchDistanceRatio: 0.12,
   trailDurationMs: 1700,
   showTrail: true,
+  showGrayscale: true,
 }
 
 type RuntimeMetrics = FrameResult & {
   analysisFps: number
-  averageProcessingTime: number
+  timings: TimingSummary<keyof typeof BACKGROUND_TIMING_LABELS>
   missedVideoFrames: number
 }
 
@@ -43,7 +46,7 @@ const INITIAL_METRICS: RuntimeMetrics = {
   isCalibrating: false,
   foregroundRatio: 0,
   analysisFps: 0,
-  averageProcessingTime: 0,
+  timings: new ProcessingTimings(BACKGROUND_TIMING_LABELS).summarize(),
   missedVideoFrames: 0,
 }
 
@@ -121,7 +124,6 @@ export function TrackerView() {
     let lastReportAt = performance.now()
     let lastPresentedFrames: number | null = null
     let processedFrames = 0
-    let totalProcessingTime = 0
     let missedVideoFrames = 0
     let latestResult: FrameResult = {
       trackCount: 0,
@@ -136,7 +138,6 @@ export function TrackerView() {
       lastReportAt = performance.now()
       lastPresentedFrames = null
       processedFrames = 0
-      totalProcessingTime = 0
       missedVideoFrames = 0
       latestResult = { ...INITIAL_METRICS, isCalibrating: true }
       setMetrics({ ...INITIAL_METRICS, isCalibrating: true })
@@ -168,9 +169,7 @@ export function TrackerView() {
       // mediaTime (seconds, potentially zero for live streams).
       try {
         if (scheduler.shouldProcess(metadata.presentationTime, targetFpsRef.current)) {
-          const startedAt = performance.now()
           latestResult = engine.process(video, metadata.presentationTime, settingsRef.current)
-          totalProcessingTime += performance.now() - startedAt
           processedFrames += 1
         }
       } catch (error) {
@@ -189,13 +188,11 @@ export function TrackerView() {
         setMetrics({
           ...latestResult,
           analysisFps: (processedFrames * 1000) / reportDuration,
-          averageProcessingTime:
-            processedFrames === 0 ? 0 : totalProcessingTime / processedFrames,
+          timings: engine.getTimingSummary(),
           missedVideoFrames,
         })
         lastReportAt = now
         processedFrames = 0
-        totalProcessingTime = 0
       }
       callbackId = video.requestVideoFrameCallback(processFrame)
     }
@@ -267,10 +264,10 @@ export function TrackerView() {
             label="ANALYSIS"
             value={`${metrics.analysisFps.toFixed(1)} FPS`}
           />
-          <Metric
-            label="PROCESSING"
-            value={`${metrics.averageProcessingTime.toFixed(1)} MS`}
-          />
+          {Object.entries(BACKGROUND_TIMING_LABELS).map(([key, label]) => {
+            const timing = metrics.timings[key as keyof typeof BACKGROUND_TIMING_LABELS]
+            return <Metric key={key} label={`${label}·AVG / P95`} value={`${timing.average.toFixed(1)} / ${timing.p95.toFixed(1)} MS`} />
+          })}
           <Metric label="BLOBS" value={metrics.detectionCount.toString()} />
           <Metric label="DROPPED" value={metrics.missedVideoFrames.toString()} />
         </dl>
@@ -424,6 +421,14 @@ export function TrackerView() {
               }))
             }
           />
+        </div>
+
+        <div className="option-row">
+          <label htmlFor="show-grayscale">Grayscale regions</label>
+          <input id="show-grayscale" type="checkbox" checked={settings.showGrayscale} onChange={event => {
+            setSettings(current => ({ ...current, showGrayscale: event.target.checked }))
+            engineRef.current?.resetTimings()
+          }} />
         </div>
 
         {/*<button

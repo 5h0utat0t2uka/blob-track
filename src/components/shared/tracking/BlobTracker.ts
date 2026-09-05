@@ -29,6 +29,11 @@ export class BlobTracker {
     this.previousTimestampMs = null
   }
 
+  /** Read the latest observation state without advancing time or adding hits. */
+  getTracks(): readonly Track[] {
+    return this.tracks.filter(track => track.state !== 'tentative')
+  }
+
   update(
     detections: readonly Detection[],
     timestampMs: number,
@@ -38,7 +43,7 @@ export class BlobTracker {
       throw new RangeError('Invalid tracking timestamp.')
     }
     if (timestampMs === this.previousTimestampMs) {
-      return this.tracks.filter((track) => track.state !== 'tentative')
+      return this.getTracks()
     }
     if (this.previousTimestampMs !== null && timestampMs < this.previousTimestampMs) {
       this.reset()
@@ -146,7 +151,7 @@ export class BlobTracker {
       }
     }
 
-    return this.tracks.filter((track) => track.state !== 'tentative')
+    return this.getTracks()
   }
 
   private createTrack(detection: Detection, timestampMs: number): Track {

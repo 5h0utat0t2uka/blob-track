@@ -18,8 +18,8 @@ function Home() {
   return (
     <main className='home'>
       <section>
-        <h1>Blob Tracker and Object Detection Tracker</h1>
-        <p>This React application compares client-side tracking using background subtraction and MediaPipe Tasks Vision. Both modes render bounding boxes, center points, IDs, and trajectories regions without uploading camera frames.</p>
+        <h1>Vision Tracker</h1>
+        <p>A React demo of browser-based detection and tracking using background subtraction and MediaPipe Tasks Vision Object Detector. Both modes display bounding boxes, center points, track IDs, and motion trails regions. All video processing runs locally in the browser without uploading camera frames.</p>
         <a href="https://github.com/5h0utat0t2uka/blob-track" target="_blank" rel="noopener noreferrer">Repository</a>
         <nav aria-label="Tracking methods">
           <ul>

@@ -8,11 +8,15 @@ import {
   DETECTION_CATEGORIES,
   resolveMediaPipeAssetUrls,
   getInferenceSize,
+  INFERENCE_LONG_EDGES,
+  isInferenceLongEdge,
+  type InferenceLongEdge,
   TRACK_MISSING_TOLERANCE_MS,
 } from '../src/components/mediapipe-tasks-vision/config.ts'
 import { BlobTracker } from '../src/components/shared/tracking/BlobTracker.ts'
 import type { Detection, TrackerSettings } from '../src/components/shared/tracking/types.ts'
-import { ProcessingTimings, TIMING_SAMPLE_LIMIT, TIMING_LABELS } from '../src/components/mediapipe-tasks-vision/ProcessingTimings.ts'
+import { ProcessingTimings, TIMING_SAMPLE_LIMIT } from '../src/components/shared/ProcessingTimings.ts'
+import { TIMING_LABELS } from '../src/components/mediapipe-tasks-vision/timingConfig.ts'
 
 const TRACKER_SETTINGS: TrackerSettings = {
   maxMissingDurationMs: 500,
@@ -148,7 +152,7 @@ test('推論画像は拡大せず長辺640に収め、丸め誤差を含め元�
 })
 
 test('時間統計は最新120結果に限定し、平均・nearest-rank p95を算出してリセットできる', () => {
-  const timings = new ProcessingTimings()
+  const timings = new ProcessingTimings(TIMING_LABELS)
   for (let i = 1; i <= TIMING_SAMPLE_LIMIT + 20; i++) {
     timings.add({ capture: i, roundTrip: 2 * i, inference: i, tracking: i, render: i, total: 3 * i })
   }
@@ -161,4 +165,32 @@ test('時間統計は最新120結果に限定し、平均・nearest-rank p95を�
   for (const key of Object.keys(TIMING_LABELS) as (keyof typeof TIMING_LABELS)[]) {
     assert.deepEqual(timings.summarize()[key], { average: 0, p95: 0 })
   }
+})
+
+test('推論解像度の全選択肢は縦横比を維持し、小さい入力は拡大しない', () => {
+  assert.deepEqual(INFERENCE_LONG_EDGES, [320, 480, 640])
+  for (const longEdge of INFERENCE_LONG_EDGES) {
+    assert.ok(isInferenceLongEdge(longEdge))
+    assert.deepEqual(getInferenceSize(1280, 720, longEdge), { width: longEdge, height: longEdge * 9 / 16 })
+    assert.deepEqual(getInferenceSize(720, 1280, longEdge), { width: longEdge * 9 / 16, height: longEdge })
+    assert.deepEqual(getInferenceSize(160, 90, longEdge), { width: 160, height: 90 })
+  }
+  assert.equal(isInferenceLongEdge(400), false)
+  assert.throws(() => getInferenceSize(1280, 720, 400 as InferenceLongEdge), RangeError)
+})
+
+test('区間ごとの統計は独立し、再描画で推論のサンプルを増やさない', () => {
+  const timings = new ProcessingTimings(TIMING_LABELS)
+  timings.add({ inference: 90, total: 120 })
+  for (let i = 1; i <= TIMING_SAMPLE_LIMIT; i++) timings.add({ render: i })
+  timings.add({ inference: NaN, total: -1, render: Infinity })
+  const summary = timings.summarize()
+  assert.deepEqual(summary.inference, { average: 90, p95: 90 })
+  assert.deepEqual(summary.total, { average: 120, p95: 120 })
+  assert.deepEqual(summary.capture, { average: 0, p95: 0 })
+  assert.deepEqual(summary.render, { average: 60.5, p95: 114 })
+  timings.reset()
+  timings.add({ render: 2 })
+  assert.deepEqual(timings.summarize().render, { average: 2, p95: 2 })
+  assert.deepEqual(timings.summarize().inference, { average: 0, p95: 0 })
 })
