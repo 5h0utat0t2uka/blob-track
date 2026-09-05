@@ -1,4 +1,4 @@
-import type { Detection, Rect, Track, TrackingSettings } from './types.ts'
+import type { Detection, Rect, Track, TrackerSettings } from './types.ts'
 import { timeConstantFrom30FpsRate, timeWeight } from './timing.ts'
 
 const VELOCITY_TIME_CONSTANT_MS = timeConstantFrom30FpsRate(0.4)
@@ -32,7 +32,7 @@ export class BlobTracker {
   update(
     detections: readonly Detection[],
     timestampMs: number,
-    settings: TrackingSettings,
+    settings: TrackerSettings,
   ): readonly Track[] {
     if (!Number.isFinite(timestampMs)) {
       throw new RangeError('Invalid tracking timestamp.')
@@ -44,9 +44,15 @@ export class BlobTracker {
       this.reset()
     }
     this.previousTimestampMs = timestampMs
-    // Expire before association so a late detection cannot revive an expired ID.
+    // A first-miss policy does not count time spent awaiting the next observation.
+    // Once a miss is observed, expire before association to avoid reviving old IDs.
     this.tracks = this.tracks.filter(
-      (track) => timestampMs - track.lastObservedAtMs <= settings.maxMissingDurationMs,
+      (track) => {
+        const missingSince = settings.missingTimeBasis === 'first-miss'
+          ? track.missingSinceMs
+          : track.lastObservedAtMs
+        return missingSince === undefined || timestampMs - missingSince <= settings.maxMissingDurationMs
+      },
     )
     const diagonal = Math.hypot(this.width, this.height)
     const baseMaxDistance = diagonal * settings.maxMatchDistanceRatio
@@ -70,6 +76,9 @@ export class BlobTracker {
         detectionIndex += 1
       ) {
         const detection = detections[detectionIndex]
+        if (track.categoryName !== detection.categoryName) {
+          continue
+        }
         const distance = Math.hypot(
           detection.center.x - track.center.x,
           detection.center.y - track.center.y,
@@ -121,6 +130,7 @@ export class BlobTracker {
       }
 
       track.state = 'lost'
+      track.missingSinceMs ??= timestampMs
       this.predictTrack(track, timestampMs)
     }
 
@@ -142,6 +152,8 @@ export class BlobTracker {
   private createTrack(detection: Detection, timestampMs: number): Track {
     const track: Track = {
       id: this.nextId,
+      categoryName: detection.categoryName,
+      score: detection.score,
       bbox: { ...detection.bbox },
       center: { ...detection.center },
       velocity: { x: 0, y: 0 },
@@ -170,10 +182,12 @@ export class BlobTracker {
     track.velocity.x += weight * (measuredVelocityX - track.velocity.x)
     track.velocity.y += weight * (measuredVelocityY - track.velocity.y)
     track.bbox = { ...detection.bbox }
+    track.score = detection.score
     track.center = { ...detection.center }
     track.lastObservedBox = { ...detection.bbox }
     track.lastObservedCenter = { ...detection.center }
     track.lastObservedAtMs = timestampMs
+    track.missingSinceMs = undefined
     track.hits += 1
     // Confirmation is evidence-based: require two distinct observations.
     track.state = track.hits >= 2 ? 'confirmed' : 'tentative'

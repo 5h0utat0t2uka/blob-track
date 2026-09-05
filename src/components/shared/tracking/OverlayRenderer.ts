@@ -1,4 +1,8 @@
-import type { Point, Rect, Track } from '../tracking/types.ts'
+import type { Point, Rect, Track } from './types.ts'
+
+// Video filtering needs fewer backing pixels than crisp lines and text.
+export const FILTER_MAX_PIXEL_RATIO = 1
+export const OVERLAY_MAX_PIXEL_RATIO = 2
 
 type CoverTransform = {
   renderWidth: number
@@ -45,20 +49,22 @@ export class OverlayRenderer {
   resize(cssWidth: number, cssHeight: number, devicePixelRatio: number): void {
     const safeWidth = Math.max(1, cssWidth)
     const safeHeight = Math.max(1, cssHeight)
-    const pixelRatio = Math.min(Math.max(1, devicePixelRatio), 2)
-    const renderWidth = Math.round(safeWidth * pixelRatio)
-    const renderHeight = Math.round(safeHeight * pixelRatio)
     this.cssWidth = safeWidth
     this.cssHeight = safeHeight
 
-    for (const canvas of [this.filterCanvas, this.overlayCanvas]) {
+    for (const [canvas, context, limit] of [
+      [this.filterCanvas, this.filterContext, FILTER_MAX_PIXEL_RATIO],
+      [this.overlayCanvas, this.overlayContext, OVERLAY_MAX_PIXEL_RATIO],
+    ] as const) {
+      const pixelRatio = Math.min(Math.max(1, devicePixelRatio), limit)
+      const renderWidth = Math.round(safeWidth * pixelRatio)
+      const renderHeight = Math.round(safeHeight * pixelRatio)
       if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
         canvas.width = renderWidth
         canvas.height = renderHeight
       }
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
     }
-    this.filterContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
-    this.overlayContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
   }
 
   clear(): void {

@@ -1,4 +1,7 @@
-import { timeConstantFrom30FpsRate, timeWeight } from './timing.ts'
+import {
+  timeConstantFrom30FpsRate,
+  timeWeight,
+} from '../shared/tracking/timing.ts'
 
 type MotionDetectorOptions = {
   threshold: number
