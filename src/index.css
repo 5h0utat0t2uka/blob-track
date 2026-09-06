@@ -72,16 +72,8 @@ button {
     }
     > .privacy {
       inline-size: fit-content;
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 0.5rem;
-      text-decoration: none;
+      font-size: 0.8rem;
       color: gray;
-      > svg {
-        inline-size: 1em;
-        block-size: 1em;
-        aspect-ratio: 1;
-      }
       > p {
         margin: 0;
         text-box: trim-both;
