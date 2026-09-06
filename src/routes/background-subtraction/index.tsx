@@ -14,7 +14,7 @@ import {
   DEFAULT_ANALYSIS_LONG_EDGE,
   isAnalysisLongEdge,
   type AnalysisLongEdge,
-} from '../../components/background-subtraction/analysisConfig.ts'
+} from '../../components/shared/tracking/analysisConfig.ts'
 import {
   CameraToggleButton,
   Metric,

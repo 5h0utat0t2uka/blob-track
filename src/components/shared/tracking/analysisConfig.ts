@@ -15,3 +15,15 @@ export const OPENING_KERNEL_SIZES = {
 export function isAnalysisLongEdge(value: number): value is AnalysisLongEdge {
   return ANALYSIS_LONG_EDGES.some((longEdge) => longEdge === value)
 }
+
+export function getAnalysisSize(sourceWidth: number, sourceHeight: number, longEdge: AnalysisLongEdge = DEFAULT_ANALYSIS_LONG_EDGE): { width: number; height: number } {
+  if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 0 || sourceHeight <= 0) {
+    throw new RangeError('Invalid video dimensions.')
+  }
+  if (!isAnalysisLongEdge(longEdge)) throw new RangeError('Invalid analysis resolution.')
+  const scale = Math.min(1, longEdge / Math.max(sourceWidth, sourceHeight))
+  return {
+    width: Math.max(1, Math.round(sourceWidth * scale)),
+    height: Math.max(1, Math.round(sourceHeight * scale)),
+  }
+}

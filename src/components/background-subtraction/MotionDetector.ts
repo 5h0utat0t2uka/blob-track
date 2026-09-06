@@ -2,6 +2,7 @@ import {
   timeConstantFrom30FpsRate,
   timeWeight,
 } from '../shared/tracking/timing.ts'
+import { BinaryOpening } from '../shared/tracking/BinaryOpening.ts'
 
 type MotionDetectorOptions = {
   threshold: number
@@ -21,37 +22,27 @@ const GLOBAL_CHANGE_RATIO = 0.8
 const GLOBAL_CHANGE_TIME_CONSTANT_MS = timeConstantFrom30FpsRate(0.2)
 
 export class MotionDetector {
-  private readonly width: number
-  private readonly height: number
-  private readonly openingRadius: number
+  private readonly opening: BinaryOpening
   private readonly background: Float32Array
   private readonly gray: Uint8Array
   private readonly foregroundState: Uint8Array
   private readonly rawMask: Uint8Array
-  private readonly scratchMask: Uint8Array
   private hasBackground = false
   private warmupElapsedMs = 0
 
   constructor(width: number, height: number, openingKernelSize = 3) {
-    if (!Number.isInteger(openingKernelSize) || openingKernelSize < 3 || openingKernelSize % 2 !== 1) {
-      throw new RangeError('Opening kernel size must be an odd integer of at least 3.')
-    }
-    this.width = width
-    this.height = height
-    this.openingRadius = (openingKernelSize - 1) / 2
+    this.opening = new BinaryOpening(width, height, openingKernelSize)
     const pixelCount = width * height
     this.background = new Float32Array(pixelCount)
     this.gray = new Uint8Array(pixelCount)
     this.foregroundState = new Uint8Array(pixelCount)
     this.rawMask = new Uint8Array(pixelCount)
-    this.scratchMask = new Uint8Array(pixelCount)
   }
 
   reset(): void {
     this.background.fill(0)
     this.foregroundState.fill(0)
     this.rawMask.fill(0)
-    this.scratchMask.fill(0)
     this.hasBackground = false
     this.warmupElapsedMs = 0
   }
@@ -115,7 +106,7 @@ export class MotionDetector {
         learningRate * (this.gray[index] - this.background[index])
     }
 
-    this.applyOpening()
+    this.opening.apply(this.rawMask)
     return this.result(false, foregroundRatio)
   }
 
@@ -137,50 +128,6 @@ export class MotionDetector {
     for (let index = 0; index < this.gray.length; index += 1) {
       this.background[index] +=
         learningRate * (this.gray[index] - this.background[index])
-    }
-  }
-
-  private applyOpening(): void {
-    this.applyMorphology(true)
-    this.applyMorphology(false)
-  }
-
-  // A square kernel is separable into horizontal and vertical passes, O(pixels * kernel width).
-  // Reuse both buffers; preserve the existing rule that incomplete border neighborhoods are zero.
-  private applyMorphology(isErosion: boolean): void {
-    const { width, height, rawMask, scratchMask, openingRadius: radius } = this
-    const decisiveValue = isErosion ? 0 : 1
-    const initialValue = isErosion ? 1 : 0
-    scratchMask.fill(0)
-
-    for (let y = 0; y < height; y += 1) {
-      for (let x = radius; x < width - radius; x += 1) {
-        const index = y * width + x
-        let value = initialValue
-        for (let offset = -radius; offset <= radius; offset += 1) {
-          if (rawMask[index + offset] === decisiveValue) {
-            value = decisiveValue
-            break
-          }
-        }
-        scratchMask[index] = value
-      }
-    }
-
-    rawMask.fill(0)
-
-    for (let y = radius; y < height - radius; y += 1) {
-      for (let x = radius; x < width - radius; x += 1) {
-        const index = y * width + x
-        let value = initialValue
-        for (let offset = -radius; offset <= radius; offset += 1) {
-          if (scratchMask[index + offset * width] === decisiveValue) {
-            value = decisiveValue
-            break
-          }
-        }
-        rawMask[index] = value
-      }
     }
   }
 

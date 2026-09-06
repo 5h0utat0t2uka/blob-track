@@ -2,15 +2,16 @@ import { BlobTracker } from '../shared/tracking/BlobTracker.ts'
 import { OverlayRenderer } from '../shared/tracking/OverlayRenderer.ts'
 import { MAX_FRAME_GAP_MS } from '../shared/tracking/timing.ts'
 import { ProcessingTimings } from '../shared/ProcessingTimings.ts'
-import { ConnectedComponents } from './ConnectedComponents.ts'
+import { ConnectedComponents } from '../shared/tracking/ConnectedComponents.ts'
 import { MotionDetector } from './MotionDetector.ts'
 import type { TrackingSettings } from './types.ts'
 import {
   DEFAULT_ANALYSIS_LONG_EDGE,
   OPENING_KERNEL_SIZES,
   isAnalysisLongEdge,
+  getAnalysisSize,
   type AnalysisLongEdge,
-} from './analysisConfig.ts'
+} from '../shared/tracking/analysisConfig.ts'
 
 export const BACKGROUND_TIMING_LABELS = {
   capture: 'CAPTURE',
@@ -44,27 +45,6 @@ const INITIAL_RESULT: FrameResult = {
   detectionCount: 0,
   isCalibrating: true,
   foregroundRatio: 0,
-}
-
-export function getAnalysisSize(
-  sourceWidth: number,
-  sourceHeight: number,
-  longEdge: AnalysisLongEdge = DEFAULT_ANALYSIS_LONG_EDGE,
-): {
-  width: number
-  height: number
-} {
-  if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 0 || sourceHeight <= 0) {
-    throw new RangeError('Invalid video dimensions.')
-  }
-  if (!isAnalysisLongEdge(longEdge)) {
-    throw new RangeError('Invalid analysis resolution.')
-  }
-  const scale = Math.min(1, longEdge / Math.max(sourceWidth, sourceHeight))
-  return {
-    width: Math.max(1, Math.round(sourceWidth * scale)),
-    height: Math.max(1, Math.round(sourceHeight * scale)),
-  }
 }
 
 export class TrackingEngine {
