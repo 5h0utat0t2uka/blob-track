@@ -1,6 +1,6 @@
 # Vision Tracker
 ![Blob tracking visualization](./docs/blob-tracking-visualization.png)
-A React demo of browser-based detection and tracking using background subtraction and MediaPipe Tasks Vision Object Detector.  
+A React demo of browser-based detection and tracking using background subtraction, HSV color segmentation, and MediaPipe Tasks Vision Object Detector.\
 All video processing runs locally in the browser without uploading camera frames.
 
 ## Features
@@ -17,10 +17,14 @@ All video processing runs locally in the browser without uploading camera frames
 - `/` — tracking method selection
 - `/background-subtraction`
   - Background Subtraction Blob Tracker
-  機械学習モデルを利用せず Background Subtraction（背景差分）を利用した動体検出の実装
+  機械学習モデルやAIを利用せず Background Subtraction（背景差分）を利用した Blob Track の実装
+
+- `/color-segmentation`
+  - HSV Color Segmentation Blob Tracking
+  機械学習モデルを利用せず HSV色空間で特定の色の領域を抽出しして Blob Track を行う実装
 
 - `/mediapipe-tasks-vision`
-  - MediaPipe Tasks Vision Object Detection & Tracking
+  - MediaPipe Tasks Vision Object Detection & Tracking  
   特定のオブジェクトを対象に MediaPipe Tasks Vision の Object Detectorを利用した実装
 
 ## Background Subtraction Blob Track
@@ -32,6 +36,12 @@ All video processing runs locally in the browser without uploading camera frames
 6. 8近傍Connected ComponentsによるBlob抽出
 7. 距離・IoU・速度予測によるTrackとの1対1関連付け
 8. `object-fit: cover`を考慮してOverlay Canvasへ描画
+
+## HSV Color Segmentation Blob Track
+1. 元映像を長辺320px（初期値）または480pxへ縮小し、RGB画素を取得
+2. HSVへ変換し、選択色との差をH/S/Vの許容幅で判定。Hは0〜360°の循環距離、S/Vは0〜1で計算
+3. 320pxでは3×3、480pxでは5×5のopeningで孤立ノイズを除去
+4. 8近傍のBlob抽出、共通Trackerでの関連付け、矩形・軌跡の描画
 
 ## MediaPipe Tasks Vision Object Detection & Track
 1. EfficientDet-Lite0 int8 v1＋CPU（初期値）とMediaPipe WASMを同一オリジンから読み込み。設定の`Inference backend`でfloat16 v1＋GPUへ切り替え可能
@@ -74,6 +84,7 @@ All video processing runs locally in the browser without uploading camera frames
 | RATE SKIPS | 受付可能だが設定FPSの間隔を満たさず見送ったフレーム数 |
 
 ## References
+- [OpenCV: HSV range thresholding](https://docs.opencv.org/4.x/da/d97/tutorial_threshold_inRange.html)
 - [Media Capture and Streams](https://w3c.github.io/mediacapture-main/)
 - [Video frame callbacks specification](https://wicg.github.io/video-rvfc/)
 - [HTML Standard: video dimensions](https://html.spec.whatwg.org/multipage/media.html#dom-video-videowidth)

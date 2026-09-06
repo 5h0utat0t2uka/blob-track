@@ -1,4 +1,4 @@
-import type { Detection } from '../shared/tracking/types.ts'
+import type { Detection } from './types.ts'
 
 export class ConnectedComponents {
   private readonly width: number

@@ -18,6 +18,7 @@ type RangeControlProps = {
   id: string
   label: string
   hint?: string
+  disabled?: boolean
   min: number
   max: number
   step: number
@@ -30,6 +31,7 @@ export function RangeControl({
   id,
   label,
   hint,
+  disabled,
   min,
   max,
   step,
@@ -48,6 +50,7 @@ export function RangeControl({
       <input
         id={id}
         type="range"
+        disabled={disabled}
         min={min}
         max={max}
         step={step}

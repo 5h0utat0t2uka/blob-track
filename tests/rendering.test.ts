@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getAnalysisSize, TrackingEngine } from '../src/components/background-subtraction/TrackingEngine.ts'
+import { TrackingEngine } from '../src/components/background-subtraction/TrackingEngine.ts'
 import {
   ANALYSIS_LONG_EDGES,
+  getAnalysisSize,
   DEFAULT_ANALYSIS_LONG_EDGE,
   OPENING_KERNEL_SIZES,
   isAnalysisLongEdge,
   type AnalysisLongEdge,
-} from '../src/components/background-subtraction/analysisConfig.ts'
+} from '../src/components/shared/tracking/analysisConfig.ts'
 import type { TrackingSettings } from '../src/components/background-subtraction/types.ts'
 import { OverlayRenderer } from '../src/components/shared/tracking/OverlayRenderer.ts'
 import { BlobTracker } from '../src/components/shared/tracking/BlobTracker.ts'

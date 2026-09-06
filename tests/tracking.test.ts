@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { ConnectedComponents } from '../src/components/background-subtraction/ConnectedComponents.ts'
+import { ConnectedComponents } from '../src/components/shared/tracking/ConnectedComponents.ts'
 import { MotionDetector } from '../src/components/background-subtraction/MotionDetector.ts'
 import type { TrackingSettings } from '../src/components/background-subtraction/types.ts'
 import { BlobTracker } from '../src/components/shared/tracking/BlobTracker.ts'
