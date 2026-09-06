@@ -93,6 +93,7 @@
   inset-block-end: max(1rem, env(safe-area-inset-bottom));
   inset-inline: 0;
   overflow: auto;
+  overscroll-behavior-block: contain;
   flex-direction: column;
   /*max-block-size: 60cqb;*/
   /*block-size: max(50vh,50cqb);*/
@@ -183,6 +184,7 @@
     }
     &:is(.blink) {
       animation: blink 1.2s infinite;
+      color: red;
     }
   }
   div {
@@ -209,13 +211,25 @@
 .control-panel {
   inline-size: min(30rem, calc(100dvw - 2rem));
   max-block-size: calc(100dvh - 2rem);
-  padding: 1rem;
   overflow: auto;
   box-sizing: border-box;
   border: 0;
   border-radius: 8px;
-  padding: 2rem;
+  padding: 0 2rem 2rem;
   color-scheme: light dark;
+  > .popover-heading {
+    position: sticky;
+    top: 0;
+    padding: 2rem 0 1rem;
+    h2 {
+      margin: 0;
+      font-size: 1.25rem;
+    }
+    button {
+      background: gray;
+      font-size: 0.7rem;
+    }
+  }
   button {
     padding: 0.8em 1.6em;
     text-transform: capitalize;
@@ -239,11 +253,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-}
-
-.popover-heading h2 {
-  margin: 0;
-  font-size: 1.25rem;
 }
 
 .control-list {
