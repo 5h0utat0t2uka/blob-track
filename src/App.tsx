@@ -28,17 +28,17 @@ function Home() {
           <ul>
             <li>
               <Link to="/background-subtraction">Background Subtraction Blob Tracking</Link>
-              <span>学習モデル・AIを利用せず Background Subtraction（背景差分）を利用した素朴な動体検出の実装</span>
+              <span>機械学習モデルやAIを利用せず Background Subtraction（背景差分）を利用したシンプルな動体検出の実装</span>
             </li>
             <li>
               <Link to="/mediapipe-tasks-vision">MediaPipe Tasks Vision Object Detection Tracking</Link>
-              <span>量子化済みモデルを利用して特定のオブジェクトを対象に MediaPipe Tasks Vision を利用した実装</span>
+              <span>軽量な量子化済みモデルを利用して、特定のオブジェクトを対象に MediaPipe Tasks Vision を利用した実装</span>
             </li>
           </ul>
         </nav>
         <div className='privacy'>
           <svg width={24} height={24} viewBox="0 0 24 24"><g fill="none"><path fill="url(#SVGqgUHFcHw)" d="M3 5.75A.75.75 0 0 1 3.75 5c2.663 0 5.258-.943 7.8-2.85a.75.75 0 0 1 .9 0C14.992 4.057 17.587 5 20.25 5a.75.75 0 0 1 .75.75V11c0 5.001-2.958 8.676-8.725 10.948a.75.75 0 0 1-.55 0C5.958 19.676 3 16 3 11z"></path><path fill="url(#SVG4ljmadFG)" fillOpacity={0.5} d="M3 5.75A.75.75 0 0 1 3.75 5c2.663 0 5.258-.943 7.8-2.85a.75.75 0 0 1 .9 0C14.992 4.057 17.587 5 20.25 5a.75.75 0 0 1 .75.75V11c0 5.001-2.958 8.676-8.725 10.948a.75.75 0 0 1-.55 0C5.958 19.676 3 16 3 11z"></path><path fill="url(#SVGHAkkzelU)" d="M17.5 12a5.5 5.5 0 1 1 0 11a5.5 5.5 0 0 1 0-11"></path><path fill="url(#SVGUi1AWdea)" fillRule="evenodd" d="M20.854 15.146a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708l1.646 1.647l3.646-3.647a.5.5 0 0 1 .708 0" clipRule="evenodd"></path><defs><radialGradient id="SVGqgUHFcHw" cx={0} cy={0} r={1} gradientTransform="rotate(54.497 6.945 -8.578)scale(47.5993 42.0478)" gradientUnits="userSpaceOnUse"><stop offset={0.338} stopColor="#0fafff"></stop><stop offset={0.529} stopColor="#367af2"></stop><stop offset={0.682} stopColor="#5750e2"></stop><stop offset={0.861} stopColor="#cc23d1"></stop></radialGradient><radialGradient id="SVG4ljmadFG" cx={0} cy={0} r={1} gradientTransform="matrix(0 8.125 -8.35714 0 17.786 18.875)" gradientUnits="userSpaceOnUse"><stop offset={0.5} stopColor="#1e1868"></stop><stop offset={1} stopColor="#1e1868" stopOpacity={0}></stop></radialGradient><linearGradient id="SVGHAkkzelU" x1={12.393} x2={19.984} y1={14.063} y2={21.95} gradientUnits="userSpaceOnUse"><stop stopColor="#52d17c"></stop><stop offset={1} stopColor="#22918b"></stop></linearGradient><linearGradient id="SVGUi1AWdea" x1={15.313} x2={16.45} y1={15.51} y2={21.13} gradientUnits="userSpaceOnUse"><stop stopColor="#fff"></stop><stop offset={1} stopColor="#e3ffd9"></stop></linearGradient></defs></g></svg>
-          <p>映像の解析は端末内で処理され、外部には何も送信されません。</p>
+          <p>映像の解析は全て端末内で処理され、外部へのデータ送信は行われません。</p>
         </div>
       </section>
     </main>
