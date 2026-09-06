@@ -1,3 +1,5 @@
+import type { CameraStatus } from '../../camera/CameraSession.ts'
+
 type MetricProps = {
   label: string
   value: string
@@ -70,6 +72,7 @@ export function SettingsIcon() {
 }
 
 type CameraToggleButtonProps = {
+  status: CameraStatus
   active: boolean
   disabled?: boolean
   onStart: () => void
@@ -77,14 +80,18 @@ type CameraToggleButtonProps = {
 }
 
 export function CameraToggleButton({
+  status,
   active,
   disabled = false,
   onStart,
   onStop,
 }: CameraToggleButtonProps) {
+  const blink = status !== 'running'
+  const title = active ? 'Stop Camera' : 'Start Camera'
+
   if (active) {
     return (
-      <button type="button" onClick={onStop} aria-label="Abort">
+      <button type="button" onClick={onStop} aria-label="Abort" title={title}>
         <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
           <path
             fill="currentColor"
@@ -96,7 +103,7 @@ export function CameraToggleButton({
   }
 
   return (
-    <button type="button" onClick={onStart} aria-label="Start" disabled={disabled}>
+    <button type="button" onClick={onStart} aria-label="Start" disabled={disabled} title={title} className={blink ? 'blink' : undefined}>
       <svg width={24} height={24} viewBox="0 0 24 24" aria-hidden="true">
         <path
           fill="currentColor"

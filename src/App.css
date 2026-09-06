@@ -1,3 +1,9 @@
+@keyframes blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
 .tracker-app,
 .video-stage {
   position: fixed;
@@ -41,7 +47,7 @@
   display: none;
 }
 
-.stage-placeholder {
+/*.stage-placeholder {
   position: fixed;
   inset: 0;
   margin: auto;
@@ -50,7 +56,13 @@
   place-items: center;
   place-content: center;
   inline-size: max-content;
-  /*block-size: max-content;*/
+  block-size: max-content;
+  padding: 1rem;
+  border-radius: 8px;
+  z-index: 4;
+  background:
+  color-mix(in oklab, black 50%, transparent);
+  backdrop-filter: blur(16px);
   p {
     margin: 0;
   }
@@ -58,7 +70,7 @@
     font-size: 0.8rem;
     color: gray;
   }
-}
+}*/
 
 /*.stage-placeholder p {
   margin: 0;
@@ -71,6 +83,26 @@
 
 .metrics {
   z-index: 3;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  gap: 1rem;
+  padding: 1.5rem;
+  font-family: ui-monospace,monospace;
+  display: flex;
+  position: fixed;
+  inset-block-end: max(1rem, env(safe-area-inset-bottom));
+  inset-inline: 0;
+  overflow: auto;
+  flex-direction: column;
+  /*max-block-size: 60cqb;*/
+  /*block-size: max(50vh,50cqb);*/
+  block-size: min(50dvh,50cqb);
+  max-block-size: max-content;
+  gap: 0.5rem;
+  inline-size: max-content;
+  margin: 0;
+
+  /*z-index: 3;
   color: #fff;
   font-variant-numeric: tabular-nums;
   gap: 1.5rem;
@@ -86,7 +118,8 @@
   inset-inline-end: 0;
   border-radius: 8px;
   background: color-mix(in oklab, black 50%, transparent);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);*/
+
   /*position: fixed;
   z-index: 3;
   overflow: auto;
@@ -106,22 +139,20 @@
       margin-inline-end: .5rem;
     }
   }
+  > .metric {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.6rem;
+    dt {
+      opacity: 0.7;
+    }
+    dd {
+      margin: 0;
+    }
+  }
 }
 
-.metric {
-  display: grid;
-  gap: 0.25rem;
-}
 
-.metric dt {
-  font-size: 0.6rem;
-  opacity: 0.7;
-}
-
-.metric dd {
-  margin: 0;
-  font-size: 0.8rem;
-}
 
 
 .global-controls {
@@ -149,6 +180,9 @@
     &:has(svg) {
       background: transparent;
       padding: 0;
+    }
+    &:is(.blink) {
+      animation: blink 1.2s infinite;
     }
   }
   div {

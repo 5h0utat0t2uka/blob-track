@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { useCamera } from '../hooks/useCamera.ts'
-import { BlobTracker } from '../components/shared/tracking/BlobTracker.ts'
-import { OverlayRenderer } from '../components/shared/tracking/OverlayRenderer.ts'
-import type { TrackerSettings } from '../components/shared/tracking/types.ts'
+import { useCamera } from '../../hooks/useCamera.ts'
+import { BlobTracker } from '../../components/shared/tracking/BlobTracker.ts'
+import { OverlayRenderer } from '../../components/shared/tracking/OverlayRenderer.ts'
+import type { TrackerSettings } from '../../components/shared/tracking/types.ts'
 import {
   CameraToggleButton,
   Metric,
   RangeControl,
   SettingsIcon,
-} from '../components/shared/TrackerControls.tsx'
+} from '../../components/shared/TrackerControls.tsx'
 import {
   DEFAULT_DETECTION_CATEGORIES,
   DEFAULT_INFERENCE_BACKEND,
@@ -28,13 +28,13 @@ import {
   TRACK_MISSING_TOLERANCE_MS,
   resolveMediaPipeAssetUrls,
   type DetectionCategory,
-} from '../components/mediapipe-tasks-vision/config.ts'
+} from '../../components/mediapipe-tasks-vision/config.ts'
 import {
   ObjectDetectorClient,
   type ObjectDetectorResult,
-} from '../components/mediapipe-tasks-vision/ObjectDetectorClient.ts'
-import { ProcessingTimings } from '../components/shared/ProcessingTimings.ts'
-import { TIMING_LABELS, type TimingSummary } from '../components/mediapipe-tasks-vision/timingConfig.ts'
+} from '../../components/mediapipe-tasks-vision/ObjectDetectorClient.ts'
+import { ProcessingTimings } from '../../components/shared/ProcessingTimings.ts'
+import { TIMING_LABELS, type TimingSummary } from '../../components/mediapipe-tasks-vision/timingConfig.ts'
 
 const TRACKER_SETTINGS: TrackerSettings = {
   missingTimeBasis: 'first-miss',
@@ -69,7 +69,7 @@ function createAccumulator() {
   return { cameraFrames: 0, inferenceFrames: 0, busyFrames: 0, rateLimitedFrames: 0, detectionCount: 0, trackCount: 0 }
 }
 
-export function MediaPipeTrackerPage() {
+export function MediaPipeTasksVisionObjectTracker() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const filterCanvasRef = useRef<HTMLCanvasElement>(null)
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -349,13 +349,6 @@ export function MediaPipeTrackerPage() {
         <canvas ref={filterCanvasRef} className="filter-canvas" aria-hidden="true" />
         <canvas ref={overlayCanvasRef} aria-hidden="true" />
 
-        {camera.status !== 'running' && (
-          <div className="stage-placeholder">
-            <p>右上のアイコンからカメラを開始</p>
-            <span>映像と推論は端末内のみで処理されます</span>
-          </div>
-        )}
-
         <dl className="metrics" aria-label="AI tracking metrics">
           <Metric label="TRACKS" value={metrics.trackCount.toString()} />
           <Metric label="OBJECTS" value={metrics.detectionCount.toString()} />
@@ -381,10 +374,11 @@ export function MediaPipeTrackerPage() {
           <p aria-live="polite">Object Tracker: {statusText}</p>
           <Link to="/">← Back</Link>
         </div>
-        <button type="button" popoverTarget="mediapipe-settings" aria-label="Settings">
+        <button type="button" popoverTarget="mediapipe-settings" aria-label="Settings" title={"Settings"}>
           <SettingsIcon />
         </button>
         <CameraToggleButton
+          status={camera.status}
           active={cameraActive}
           disabled={detectorStatus !== 'ready'}
           onStart={() => void camera.start(selectedDeviceId || undefined)}
