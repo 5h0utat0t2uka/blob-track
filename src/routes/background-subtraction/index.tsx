@@ -1,27 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { useCamera } from '../hooks/useCamera.ts'
-import type { CameraStatus } from '../camera/CameraSession.ts'
+import { useCamera } from '../../hooks/useCamera.ts'
+import type { CameraStatus } from '../../camera/CameraSession.ts'
 import {
   TrackingEngine,
   BACKGROUND_TIMING_LABELS,
   type FrameResult,
-} from '../components/background-subtraction/TrackingEngine.ts'
-import type { TrackingSettings } from '../components/background-subtraction/types.ts'
-import { FrameScheduler } from '../components/shared/tracking/FrameScheduler.ts'
+} from '../../components/background-subtraction/TrackingEngine.ts'
+import type { TrackingSettings } from '../../components/background-subtraction/types.ts'
+import { FrameScheduler } from '../../components/shared/tracking/FrameScheduler.ts'
 import {
   ANALYSIS_LONG_EDGES,
   DEFAULT_ANALYSIS_LONG_EDGE,
   isAnalysisLongEdge,
   type AnalysisLongEdge,
-} from '../components/background-subtraction/analysisConfig.ts'
+} from '../../components/background-subtraction/analysisConfig.ts'
 import {
   CameraToggleButton,
   Metric,
   RangeControl,
   SettingsIcon,
-} from '../components/shared/TrackerControls.tsx'
-import { ProcessingTimings, type TimingSummary } from '../components/shared/ProcessingTimings.ts'
+} from '../../components/shared/TrackerControls.tsx'
+import { ProcessingTimings, type TimingSummary } from '../../components/shared/ProcessingTimings.ts'
 
 const DEFAULT_SETTINGS: TrackingSettings = {
   motionThreshold: 70,
@@ -50,7 +50,7 @@ const INITIAL_METRICS: RuntimeMetrics = {
   missedVideoFrames: 0,
 }
 
-export function TrackerView() {
+export function BackgroundSubtractionBlobTracker() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const analysisCanvasRef = useRef<HTMLCanvasElement>(null)
   const filterCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -247,12 +247,12 @@ export function TrackerView() {
           aria-hidden="true"
         />
 
-        {camera.status !== 'running' && (
+        {/*{camera.status !== 'running' && (
           <div className="stage-placeholder">
             <p>右上のアイコンからカメラを開始</p>
-            <span>映像と解析は端末内のみで処理されます</span>
+            <span>映像と解析内容は外部に送信されません</span>
           </div>
-        )}
+        )}*/}
 
         <dl className="metrics" aria-label="Tracking metrics">
           <Metric label="TRACKS" value={metrics.trackCount.toString()} />
@@ -282,10 +282,12 @@ export function TrackerView() {
           type="button"
           popoverTarget="tracking-settings"
           aria-label="Settings"
+          title={"Settings"}
         >
           <SettingsIcon />
         </button>
         <CameraToggleButton
+          status={camera.status}
           active={camera.status === 'running' || camera.status === 'suspended' || camera.status === 'requesting'}
           onStart={() => void camera.start()}
           onStop={camera.stop}
