@@ -1,7 +1,7 @@
 # Vision Tracker
 ![Blob tracking visualization](./docs/blob-tracking-visualization.png)
-A React demo of browser-based detection and tracking using background subtraction, HSV color segmentation, and MediaPipe Tasks Vision Object Detector.\
-All video processing runs locally in the browser without uploading camera frames.
+This React app compares three client-side detection and tracking approaches: background subtraction, HSV color segmentation, and MediaPipe Tasks Vision. \
+Each modes processing without uploading camera frames.
 
 ## Features
 - リアルタイムなカメラ映像の解析
@@ -16,12 +16,12 @@ All video processing runs locally in the browser without uploading camera frames
 ## Routes
 - `/` — tracking method selection
 - `/background-subtraction`
-  - Background Subtraction Blob Tracker
-  機械学習モデルやAIを利用せず Background Subtraction（背景差分）を利用した Blob Track の実装
+  - Background Subtraction Blob Tracker  
+  機械学習モデルやAIを利用せず Background Subtraction（背景差分）を利用した動体検出の Blob Track 実装
 
 - `/color-segmentation`
-  - HSV Color Segmentation Blob Tracking
-  機械学習モデルを利用せず HSV色空間で特定の色の領域を抽出しして Blob Track を行う実装
+  - HSV Color Segmentation Blob Tracking  
+  機械学習モデルやAIを利用せず HSV色空間で特定の色の領域を抽出しして Blob Track を行う実装
 
 - `/mediapipe-tasks-vision`
   - MediaPipe Tasks Vision Object Detection & Tracking  
@@ -84,7 +84,10 @@ All video processing runs locally in the browser without uploading camera frames
 | RATE SKIPS | 受付可能だが設定FPSの間隔を満たさず見送ったフレーム数 |
 
 ## References
+- [Wikipedia: 背景差分](https://ja.wikipedia.org/wiki/背景差分)
+- [OpenCV: Background Subtraction](https://docs.opencv.org/3.4.20/d8/d38/tutorial_bgsegm_bg_subtraction.html)
 - [OpenCV: HSV range thresholding](https://docs.opencv.org/4.x/da/d97/tutorial_threshold_inRange.html)
+- [Google for Developers: Object detection task guide](https://developers.google.com/edge/mediapipe/solutions/vision/object_detector#efficientdet-lite0_model_recommended)
 - [Media Capture and Streams](https://w3c.github.io/mediacapture-main/)
 - [Video frame callbacks specification](https://wicg.github.io/video-rvfc/)
 - [HTML Standard: video dimensions](https://html.spec.whatwg.org/multipage/media.html#dom-video-videowidth)
